@@ -1,0 +1,43 @@
+Source: lilyterm
+Section: x11
+Priority: optional
+Maintainer: ChangZhuo Chen (陳昌倬) <czchen@gmail.com>
+Build-Depends:
+ debhelper (>= 9),
+ autotools-dev,
+ dh-autoreconf,
+ gettext,
+ intltool,
+ libvte-dev
+Standards-Version: 3.9.5
+Homepage: http://lilyterm.luna.com.tw/
+#Vcs-Git: git://git.debian.org/collab-maint/lilyterm.git
+#Vcs-Browser: http://git.debian.org/?p=collab-maint/lilyterm.git;a=summary
+
+Package: lilyterm
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+Description: Light and eazy-to-use terminal emulator for X
+ LilyTerm is a terminal emulator for the X Window System, based on the libvte
+ library, and aims to be fast and lightweight.
+ .
+ LilyTerm features the ability to use multiple terminals in a single window and
+ customize key binding.
+
+Package: lilyterm-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends:
+ ${misc:Depends},
+ lilyterm (= ${binary:Version})
+Description: Debug symbols for lilyterm
+ LilyTerm is a terminal emulator for the X Window System, based on the libvte
+ library, and aims to be fast and lightweight.
+ .
+ LilyTerm features the ability to use multiple terminals in a single window and
+ customize key binding.
+ .
+ This package contains debug symbols for lilyterm.

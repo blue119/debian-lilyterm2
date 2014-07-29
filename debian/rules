@@ -1,0 +1,35 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
+
+%:
+	dh $@ --with autoreconf
+
+override_dh_auto_configure:
+	mkdir -p $(CURDIR)/debian/bak
+	cp $(CURDIR)/configure.ac $(CURDIR)/debian/bak
+
+	mkdir -p $(CURDIR)/debian/bak/src
+	cp $(CURDIR)/src/Makefile.am $(CURDIR)/debian/bak/src
+
+	./autogen.sh
+	dh_auto_configure -- --disable-silent-rules
+
+override_dh_auto_clean:
+	dh_auto_clean
+	-cp $(CURDIR)/debian/bak/configure.ac $(CURDIR)
+	-cp $(CURDIR)/debian/bak/src/Makefile.am $(CURDIR)/src
+
+override_dh_strip:
+	dh_strip --dbg-package=lilyterm-dbg
+
+override_dh_installchangelogs:
+	dh_installchangelogs $(CURDIR)/ChangeLog --keep upstream
+
+override_dh_auto_install:
+	dh_auto_install
+	rm -f $(CURDIR)/debian/tmp/usr/share/doc/lilyterm/COPYING
