@@ -11,8 +11,8 @@ Build-Depends:
  libvte-dev
 Standards-Version: 3.9.5
 Homepage: http://lilyterm.luna.com.tw/
-#Vcs-Git: git://git.debian.org/collab-maint/lilyterm.git
-#Vcs-Browser: http://git.debian.org/?p=collab-maint/lilyterm.git;a=summary
+Vcs-Git: git://github.com/czchen/debian-lilyterm.git
+Vcs-Browser: https://github.com/czchen/debian-lilyterm
 
 Package: lilyterm
 Architecture: any
