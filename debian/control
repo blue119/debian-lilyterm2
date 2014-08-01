@@ -8,6 +8,7 @@ Build-Depends:
  dh-autoreconf,
  gettext,
  intltool,
+ libgtk2.0-dev,
  libvte-dev
 Standards-Version: 3.9.5
 Homepage: http://lilyterm.luna.com.tw/
