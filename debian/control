@@ -15,6 +15,7 @@ Vcs-Git: git://github.com/czchen/debian-lilyterm.git
 Vcs-Browser: https://github.com/czchen/debian-lilyterm
 
 Package: lilyterm
+Provides: x-terminal-emulator
 Architecture: any
 Depends:
  ${shlibs:Depends},
