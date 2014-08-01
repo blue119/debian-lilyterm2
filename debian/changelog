@@ -1,3 +1,12 @@
+lilyterm (0.9.9.4-2) unstable; urgency=medium
+
+  * Add Vcs information
+  * Provides: x-terminal-emulator.
+    Thanks to Charles Malaheenee (Closes: #756609)
+  * Add libgtk2.0-dev as Build-Depends
+
+ -- ChangZhuo Chen (陳昌倬) <czchen@gmail.com>  Fri, 01 Aug 2014 19:46:13 +0800
+
 lilyterm (0.9.9.4-1) unstable; urgency=low
 
   * Initial release (Closes: #752406)
