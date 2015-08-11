@@ -1,3 +1,13 @@
+lilyterm (0.9.9.4-4) unstable; urgency=medium
+
+  [ ChangZhuo Chen (陳昌倬) ]
+  * Update Vcs-*
+
+  [ Wei-Cheng Pan (潘韋成) ]
+  * Fix hard-coded Firefox as browser (Closes: #794961)
+
+ -- ChangZhuo Chen (陳昌倬) <czchen@gmail.com>  Tue, 11 Aug 2015 21:07:44 +0800
+
 lilyterm (0.9.9.4-3) unstable; urgency=medium
 
   * Fix wrong locale file name (Closes: #757080)
