@@ -16,6 +16,9 @@ override_dh_auto_configure:
 	mkdir -p $(CURDIR)/debian/bak/src
 	cp $(CURDIR)/src/Makefile.am $(CURDIR)/debian/bak/src
 
+	mkdir -p $(CURDIR)/debian/bak/po
+	cp $(CURDIR)/po/lilyterm.pot $(CURDIR)/debian/bak/po
+
 	./autogen.sh
 	dh_auto_configure -- --disable-silent-rules
 
@@ -23,6 +26,7 @@ override_dh_auto_clean:
 	dh_auto_clean
 	-cp $(CURDIR)/debian/bak/configure.ac $(CURDIR)
 	-cp $(CURDIR)/debian/bak/src/Makefile.am $(CURDIR)/src
+	-cp $(CURDIR)/debian/bak/po/lilyterm.pot $(CURDIR)/po
 
 override_dh_strip:
 	dh_strip --dbg-package=lilyterm-dbg
