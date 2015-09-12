@@ -1,7 +1,7 @@
 Source: lilyterm
 Section: x11
 Priority: optional
-Maintainer: ChangZhuo Chen (陳昌倬) <czchen@gmail.com>
+Maintainer: ChangZhuo Chen (陳昌倬) <czchen@debian.org>
 Build-Depends: debhelper (>= 9),
                autotools-dev,
                dh-autoreconf,
