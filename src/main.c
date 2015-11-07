@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2010 Lu, Chao-Ming (Tetralet).  All rights reserved.
+ * Copyright (c) 2008-2014 Lu, Chao-Ming (Tetralet).  All rights reserved.
  *
  * This file is part of LilyTerm.
  *
@@ -32,6 +32,7 @@ GtkClipboard *selection_primary = NULL;
 // gchar **empty_environ;
 gchar *system_locale_list;
 gchar *init_LC_CTYPE;
+gchar *init_LANGUAGE;
 gchar *init_encoding;
 gchar *init_LC_MESSAGES;
 const gchar *SYSTEM_VTE_CJK_WIDTH_STR = NULL;
@@ -39,12 +40,13 @@ const gchar *SYSTEM_VTE_CJK_WIDTH_STR = NULL;
 const gchar *wmclass_name = NULL;
 gchar *wmclass_class = NULL;
 const gchar *shell = NULL;
-const gchar *pwd = NULL;
+gchar *pwd = NULL;
 const gchar *home = NULL;
 
 GList *window_list = NULL;
 gchar *profile_dir = NULL;
-gboolean proc_exist = TRUE;
+gboolean proc_exist = FALSE;
+gchar *proc_file_system_path = NULL;
 
 extern gboolean force_to_quit;
 extern gchar *restricted_locale_message;
@@ -100,6 +102,10 @@ int main( int   argc,
 
 	const gchar *user_config_dir = g_get_user_config_dir();
 
+#if ! defined(SAFEMODE) && defined(DEVELOP)
+	g_message("Running %s without SAFE MODE!", PACKAGE);
+#endif
+
 #ifdef OUT_OF_MEMORY
 #  undef g_strdup_printf
 #endif
@@ -107,33 +113,26 @@ int main( int   argc,
 #ifdef OUT_OF_MEMORY
 	#define g_strdup_printf(...) NULL
 #endif
-
-	// g_debug("profile_dir = %s", profile_dir);
-	proc_exist = g_file_test("/proc", G_FILE_TEST_EXISTS);
-
-	if (proc_exist)
-	{
-		gboolean proc_is_exist = FALSE;
-		GDir *dir  = g_dir_open ("/proc", 0, NULL);
-		if (dir)
-		{
-			const gchar *entry = g_dir_read_name(dir);
-			if (entry) proc_is_exist = TRUE;
-		}
-		g_dir_close(dir);
-		// g_debug ("Got proc_is_exist = %d", proc_is_exist);
-		proc_exist = proc_is_exist;
-	}
+	proc_exist = check_if_default_proc_dir_exist(NULL);
+	// g_debug ("Get proc_exist = %d, proc_file_system_path = %s", proc_exist, proc_file_system_path);
 
 	shell = g_getenv("SHELL");
 	if (shell==NULL) shell = "";
 
-	pwd = g_getenv("PWD");
-	// pwd = g_get_current_dir();
-#ifdef SAFEMODE
-	if (pwd==NULL) pwd = g_strdup("");
-#endif
+	gboolean pwd_need_be_free = FALSE;
+	pwd = (gchar *)g_getenv("PWD");
+	if (pwd==NULL)
+	{
+		pwd_need_be_free = TRUE;
+		pwd = g_get_current_dir();
+	}
+	if (pwd==NULL)
+	{
+		pwd_need_be_free = FALSE;
+		pwd = "";
+	}
 	// g_debug("Got $PWD = %s", pwd);
+
 	home = g_getenv("HOME");
 	if (home==NULL) home = "";
 	// g_debug("Get $HOME = %s", home);
@@ -146,6 +145,10 @@ int main( int   argc,
 	// g_debug("Got wmclass_name = %s, wmclass_class = %s", wmclass_name, wmclass_class);
 
 	// init the gtk+2 engine
+
+	// GTK3: get gtk_test_widget_click() working...
+	// gdk_disable_multidevice();
+
 #ifndef UNIT_TEST
 	gtk_init(&argc, &argv);
 #endif
@@ -187,6 +190,8 @@ int main( int   argc,
 	// g_debug("Got system_locale_list = %s", system_locale_list);
 	init_LC_CTYPE = g_strdup(get_default_lc_data(LC_CTYPE));
 	// g_debug("Got init_LC_CTYPE = %s", init_LC_CTYPE);
+	init_LANGUAGE = g_strdup(get_default_lc_data(LANGUAGE));
+	// g_debug("Got init_LANGUAGE = %s", init_LANGUAGE);
 	init_LC_MESSAGES = g_strdup(get_default_lc_data(LC_MESSAGES));
 	// g_debug("init_LC_MESSAGES = %s", init_LC_MESSAGES);
 	init_encoding = (gchar *)get_encoding_from_locale(NULL);
@@ -200,6 +205,9 @@ int main( int   argc,
 	// g_debug ("Got SYSTEM_VTE_CJK_WIDTH_STR = %s", SYSTEM_VTE_CJK_WIDTH_STR);
 	// FIXME: signal(SIGCHLD, SIG_IGN);
 	// The first window of LilyTerm
+
+	// Convert the GdkColor to GdkRGBA
+	convert_system_color_to_rgba();
 
 	// g_debug("Got original encoding = %s", get_encoding_from_locale(NULL));
 	//GtkNotebook *new_window(int argc,
@@ -242,6 +250,9 @@ int main( int   argc,
 		// The argv of "main" LilyTerm can't be free.
 		// Set it to NULL here to avoid double_free().
 		argv=NULL;
+#ifdef ENABLE_X_STARTUP_NOTIFICATION_ID
+		gdk_notify_startup_complete_with_id(PACKAGE);
+#endif
 		// g_debug("gtk_main_level = %d", gtk_main_level());
 		if (! gtk_main_level())
 			gtk_main();
@@ -284,6 +295,7 @@ int main( int   argc,
 	g_free(init_encoding);
 	g_free(system_locale_list);
 	g_free(profile_dir);
+	if (pwd_need_be_free) g_free(pwd);
 	g_free(restricted_locale_message);
 	g_list_free(window_list);
 	g_free(init_LC_CTYPE);
@@ -443,7 +455,7 @@ gboolean send_socket( int   argc,
 	// send data: SOCKET_DATA_VERSION SHELL LOCALE_LIST ENCODING LC_MESSAGES PWD HOME VTE_CJK_WIDTH_STR wmclass_name wmclass_class ENVIRON ARGV
 	//				  0	1     2	    3	  4	5     6	    7	  8	9     10    11
 	gchar *arg_str = g_strdup_printf("%s\x10%s\x10%s\x10%s\x10%s\x10%s\x10%s\x10%s\x10%s\x10%s\x10%s\x10%s\x10",
-			 		 SOCKET_DATA_VERSION,
+					 SOCKET_DATA_VERSION,
 					 shell,
 					 locale_list,
 					 encoding,
@@ -599,7 +611,30 @@ gboolean read_socket(GIOChannel *channel, GIOCondition condition, gpointer user_
 		datas = split_string(data, "\x10", 12);
 		// g_debug("The SOCKET_DATA_VERSION = %s ,and the data sent via socket is %s",
 		//	   SOCKET_DATA_VERSION, datas[0]);
-		if ((datas==NULL) || compare_strings(SOCKET_DATA_VERSION, datas[0], TRUE))
+
+		if (datas==NULL)
+		{
+			// A dirty hack for sometimes the received socket datas is empty.
+			socket_fault(14, NULL, NULL, FALSE);
+			new_window(0,
+				   NULL,
+				   NULL,
+				   NULL,
+				   NULL,
+				   NULL,
+				   NULL,
+				   NULL,
+				   FALSE,
+				   NULL,
+				   NULL,
+				   NULL,
+				   NULL,
+				   FALSE,
+				   NULL,
+				   NULL,
+				   NULL);
+		}
+		else if (compare_strings(SOCKET_DATA_VERSION, datas[0], TRUE))
 		{
 			// The SOCKET_DATA_VERSION != the data sent via socket
 			gchar *received_socket_version = NULL;
@@ -615,7 +650,7 @@ gboolean read_socket(GIOChannel *channel, GIOCondition condition, gpointer user_
 			error_dialog(NULL,
 				     _("The format of socket data is out of date"),
 				     "The format of socket data is out of date",
-				     GTK_STOCK_DIALOG_ERROR,
+				     GTK_FAKE_STOCK_DIALOG_ERROR,
 				     message,
 				     NULL);
 			g_free(message);
@@ -753,6 +788,9 @@ gboolean socket_fault(int type, GError *error, GIOChannel *channel, gboolean unr
 #endif
 				G_WARNING("Error when flushing the write buffer for the channel: %s", error->message);
 			break;
+		case 14:
+			G_WARNING("Got a NULL string from the socket!");
+			break;
 		default:
 #ifdef FATAL
 			print_switch_out_of_range_error_dialog("socket_fault", "type", type);
@@ -843,7 +881,7 @@ void main_quit(GtkWidget *widget, struct Window *win_data)
 #else
 		if ((all_process_list->len==0) ||
 		    (display_child_process_dialog (all_process_list, win_data,
-		    				   CONFIRM_TO_EXIT_WITH_CHILD_PROCESS)))
+						   CONFIRM_TO_EXIT_WITH_CHILD_PROCESS)))
 #endif
 		{
 			force_to_quit = TRUE;

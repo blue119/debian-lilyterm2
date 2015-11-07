@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2010 Lu, Chao-Ming (Tetralet).  All rights reserved.
+ * Copyright (c) 2008-2014 Lu, Chao-Ming (Tetralet).  All rights reserved.
  *
  * This file is part of LilyTerm.
  *
@@ -32,4 +32,6 @@
 #include <unistd.h>
 
 #include "lilyterm.h"
-
+#if defined(USE_GTK3_GEOMETRY_METHOD) || defined(UNIT_TEST)
+void get_hint_min_size(GtkWidget *notebook, GtkWidget *scrollbar, gint *min_width, gint *min_height);
+#endif

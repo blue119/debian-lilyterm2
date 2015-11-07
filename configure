@@ -13,9 +13,11 @@ fi
 
 GTK=gtk+-2.0
 
+VERBOSITY=N
 DEBUG=N
 NLS=Y
 SAFEMODE=Y
+BACKGROUND=N
 STRIP=N
 GNOME_CONTROL_CENTER=Y
 
@@ -82,9 +84,22 @@ CHECK_MESSAGE()
 
 PACKAGE_MESSAGE()
 {
-  ERR "\n\n  Please install \""
-  WARN "$*"
-  ERR "\" package. ABORT!\n\n"
+  ERR "\n\n  Please install "
+  COUNT_PKG=1
+  for PKG in $*; do
+    if [ $COUNT_PKG -ge 2 ]; then
+      if [ $COUNT_PKG -eq $# ]; then
+	ERR " or "
+      else
+	ERR ", "
+      fi
+    fi
+    ERR "\""
+    WARN "$PKG"
+    ERR "\""
+  COUNT_PKG=$(($COUNT_PKG+1))
+  done
+  ERR " package. ABORT!\n\n"
 }
 
 VERSION_MESSAGE()
@@ -108,9 +123,11 @@ if [ "$1" = "-h" -o "$1" = "--help" -o "$1" = "-help" ]; then
   $ECHO "  `INFO '--with-gtk=2.0|3.0'`  : which gtk+ version to compile against `NORMAL '[default: 2.0]'`"
   $ECHO ""
   $ECHO "Optional Features:"
+  $ECHO "  `INFO '--enable-verbosity'`  : enable verbosity output `NORMAL '[default: disable]'`"
   $ECHO "  `INFO '--enable-debug'`      : enable debug mode `NORMAL '[default: disable]'`"
   $ECHO "  `INFO '--disable-nls'`       : disable Native Language Support `NORMAL '[default: enable]'`"
   $ECHO "  `INFO '--disable-safe-mode'` : disable run in safe mode `NORMAL '[default: enable]'`"
+  $ECHO "  `INFO '--enable-background'` : enable background for vte > 0.34.8 `NORMAL '[default: disable]'`"
   $ECHO ""
   $ECHO "run \``IMPORTANT 'make clean'`' to clean $PACKAGE builded files."
   $ECHO "run \``IMPORTANT 'make distclean'`' to clean $PACKAGE builded and configure files."
@@ -131,6 +148,12 @@ fi
 
 for opt do
   case "$opt" in
+    --enable-verbosity)
+      VERBOSITY=Y
+      ;;
+    --disable-verbosity)
+      VERBOSITY=N
+      ;;
     --enable-debug)
       DEBUG=Y
       ;;
@@ -158,6 +181,9 @@ for opt do
       ;;
     --disable-safe-mode)
       SAFEMODE=N
+      ;;
+    --enable-background)
+      BACKGROUND=Y
       ;;
     --enable-strip)
       STRIP=Y
@@ -197,7 +223,7 @@ fi
 $PKGCONFIG --cflags $GTK > /dev/null 2>&1
 if [ $? != 0 ]; then
   if [ "$GTK" = "gtk+-2.0" -a $GTK_SPC -eq 0 ]; then
-    $ECHO "[NO]. Trying GTK+3..."
+    $ECHO "[NO]. Trying GTK+3 ..."
     GTK=gtk+-3.0
     CHECK_MESSAGE 'GTK+3'
     $PKGCONFIG --cflags $GTK > /dev/null 2>&1
@@ -206,7 +232,8 @@ if [ $? != 0 ]; then
       PACKAGE_MESSAGE "libgtk2.0-dev/libgtk-3-dev"
       exit 1
     else
-      WARN "[OK]. But using Gtk+3 to build $PACKAGE is NOT recommend.\n"
+      INFO "[OK] "
+      WARN "(NOT RECOMMEND)\n"
     fi
   else
     if [ "$GTK" = "gtk+-2.0" ]; then
@@ -231,10 +258,10 @@ else
     if [ $? != 0 ]; then
       INFO "[OK]\n"
     else
-      WARN "[OK]. But using Gtk+2 > 2.12 is recommend to build $PACKAGE.\n"
+      WARN "[OK]. But using Gtk+2 > 2.12 is recommended to build $PACKAGE.\n"
     fi
   else
-    WARN "[OK]. But using Gtk+3 to build $PACKAGE is NOT recommend.\n"
+    INFO "[OK].\n"
   fi
 fi
 
@@ -245,8 +272,8 @@ if [ "$GTK" = 'gtk+-2.0' ]; then
   CHECK_MESSAGE 'VTE'
   VTE=vte
 else
-  CHECK_MESSAGE 'VTE 0.29'
-  VTE=vte-2.90
+  CHECK_MESSAGE 'VTE 0.38'
+  VTE=vte-2.91
 fi
 
 $PKGCONFIG --cflags $VTE > /dev/null 2>&1
@@ -254,11 +281,20 @@ if [ $? != 0 ]; then
   if [ "$GTK" = 'gtk+-2.0' ]; then
     ERR "[NG]"
     PACKAGE_MESSAGE "libvte-dev"
+    exit 1
   else
-    ERR "[NG]"
-    PACKAGE_MESSAGE "libvte-2.90-dev"
+    $ECHO "[NO]. Trying VTE 0.29 ..."
+    VTE=vte-2.90
+    CHECK_MESSAGE 'VTE 0.29'
+    $PKGCONFIG --cflags $VTE > /dev/null 2>&1
+    if [ $? != 0 ]; then
+      ERR "[NG]"
+      PACKAGE_MESSAGE "libvte-2.90-dev" "libvte-2.91-dev"
+      exit 1
+    else
+      INFO "[OK]\n"
+    fi
   fi
-  exit 1
 else
   if [ "$VTE" = 'vte' ]; then
     $PKGCONFIG --exists 'vte >= 0.12' > /dev/null 2>&1
@@ -272,6 +308,15 @@ else
   INFO "[OK]\n"
 fi
 
+$PKGCONFIG --exists "$VTE < 0.34.8" > /dev/null 2>&1
+if [ $? = 0 ]; then
+  BACKGROUND=N
+fi
+
+$PKGCONFIG --exists "$VTE >= 0.38.0" > /dev/null 2>&1
+if [ $? = 0 ]; then
+  BACKGROUND=N
+fi
 
 # ---- NLS ---- #
 
@@ -295,7 +340,7 @@ fi
 # ---- GNOME_CONTROL_CENTER ---- #
 
 if [ "$GNOME_CONTROL_CENTER" = 'Y' ]; then
-  GNOME_CONTROL_CENTER_DIR=`pkg-config --variable=defappsdir --define-variable=datadir='$(DATADIR)' gnome-default-applications`
+  GNOME_CONTROL_CENTER_DIR=`pkg-config --variable=defappsdir --define-variable=datadir='$(DATADIR)' gnome-default-applications 2>&1`
   if [ $? != 0 ]; then
     if [ $GNOME_CONTROL_CENTER_SPC -eq 1 ]; then
       CHECK_MESSAGE 'Gnome Control Center'
@@ -303,6 +348,7 @@ if [ "$GNOME_CONTROL_CENTER" = 'Y' ]; then
       PACKAGE_MESSAGE "gnome-control-center-dev"
       exit 1
     fi
+    GNOME_CONTROL_CENTER_DIR=
     GNOME_CONTROL_CENTER=N
   else
     CHECK_MESSAGE 'Gnome Control Center'
@@ -315,58 +361,64 @@ $ECHO ""
 # ---- REPORT ---- #
 
 INFO "=================================================\n"
-IMPORTANT "  PREFIX    = $PREFIX\n"
-IMPORTANT "  ETCDIR    = $ETCDIR\n"
+IMPORTANT "  PREFIX     = $PREFIX\n"
+IMPORTANT "  ETCDIR     = $ETCDIR\n"
+if [ "$VERBOSITY" = 'Y' ]; then
+  IMPORTANT "  VERBOSITY  = $VERBOSITY\n"
+fi
 if [ "$DEBUG" = 'Y' ]; then
-  IMPORTANT "  DEBUG     = $DEBUG\n"
+  IMPORTANT "  DEBUG      = $DEBUG\n"
 else
-  $ECHO "  DEBUG     = $DEBUG"
+  $ECHO "  DEBUG      = $DEBUG"
 fi
 if [ "$NLS" = 'N' ]; then
-  IMPORTANT "  NLS       = $NLS\n"
+  IMPORTANT "  NLS        = $NLS\n"
 else
-  $ECHO "  NLS       = $NLS"
+  $ECHO "  NLS        = $NLS"
 fi
 if [ "$SAFEMODE" = 'N' ]; then
-  IMPORTANT "  SAFEMODE  = $SAFEMODE\n"
+  IMPORTANT "  SAFEMODE   = $SAFEMODE\n"
 else
-  $ECHO "  SAFEMODE  = $SAFEMODE"
+  $ECHO "  SAFEMODE   = $SAFEMODE"
+fi
+if [ "$BACKGROUND" = 'Y' ]; then
+  IMPORTANT "  BACKGROUND = $BACKGROUND\n"
 fi
 if [ "$STRIP" = 'Y' ]; then
-  IMPORTANT "  STRIP     = $STRIP\n"
+  IMPORTANT "  STRIP      = $STRIP\n"
 fi
 CHECK_CC=`whereis "$CC" | tr -s ' ' '\n' | grep "bin/""$CC""$" | head -n 1`
 if [ -n "$CHECK_CC" ]; then
   if [ "$CC" != 'gcc' ]; then
-    IMPORTANT "  CC        = $CC\n"
+    IMPORTANT "  CC         = $CC\n"
   fi
 else
-  ERR "  CC        = $CC\n"
+  ERR "  CC         = $CC\n"
 fi
 if [ -n "$CPPFLAGS" ]; then
-  IMPORTANT "  CPPFLAGS  = $CPPFLAGS\n"
+  IMPORTANT "  CPPFLAGS   = $CPPFLAGS\n"
 fi
 if [ "$CFLAGS" != '-Wall -O -g' ]; then
-  IMPORTANT "  CFLAGS    = $CFLAGS\n"
+  IMPORTANT "  CFLAGS     = $CFLAGS\n"
 else
-  $ECHO "  CFLAGS    = $CFLAGS"
+  $ECHO "  CFLAGS     = $CFLAGS"
 fi
 if [ -n "$LDFLAGS" ]; then
-  IMPORTANT "  LDFLAGS   = $LDFLAGS\n"
+  IMPORTANT "  LDFLAGS    = $LDFLAGS\n"
 fi
 
 if [ -n "$GMAKE" ]; then
-  IMPORTANT "  MAKE      = $MAKE\n"
+  IMPORTANT "  MAKE       = $MAKE\n"
 else
 if [ -z "$MAKE" ]; then
- ERR "  MAKE      = $MAKE\n"
+ ERR "  MAKE       = $MAKE\n"
 fi
 fi
-$ECHO "  GTK       = $GTK"
-$ECHO "  VTE       = $VTE"
+$ECHO "  GTK        = $GTK"
+$ECHO "  VTE        = $VTE"
 if [ $BSD -eq 1 ]; then
-  IMPORTANT "  MANDIR       = \$(PREFIX)/man/man1\n"
-  IMPORTANT "  EXAMPLES_DIR = \$(DATADIR)/examples/\$(BINARY)\n"
+  IMPORTANT "  MANDIR        = \$(PREFIX)/man/man1\n"
+  IMPORTANT "  EXAMPLES_DIR  = \$(DATADIR)/examples/\$(BINARY)\n"
 fi
 if [ "$GNOME_CONTROL_CENTER" = 'Y' ]; then
   IMPORTANT "  GNOME_CONTROL_CENTER     = $GNOME_CONTROL_CENTER\n"
@@ -390,9 +442,11 @@ if [ $BSD -eq 1 ]; then
 	$ECHO "EXAMPLES_DIR = \$(DATADIR)/examples/\$(BINARY)" >> .config
 fi
 $ECHO "NLS = $NLS" >> .config
+$ECHO "VERBOSITY = $VERBOSITY" >> .config
 $ECHO "DEBUG = $DEBUG" >> .config
 $ECHO "NLS = $NLS" >> .config
 $ECHO "SAFEMODE = $SAFEMODE" >> .config
+$ECHO "FORCE_ENABLE_VTE_BACKGROUND = $BACKGROUND" >> .config
 $ECHO "STRIP = $STRIP" >> .config
 $ECHO "CC = $CC" >> .config
 $ECHO "CPPFLAGS = $CPPFLAGS" >> .config

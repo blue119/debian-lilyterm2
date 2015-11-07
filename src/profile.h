@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2010 Lu, Chao-Ming (Tetralet).  All rights reserved.
+ * Copyright (c) 2008-2014 Lu, Chao-Ming (Tetralet).  All rights reserved.
  *
  * This file is part of LilyTerm.
  *
@@ -30,12 +30,20 @@
 #include <unistd.h>
 // for strcmp()
 #include <string.h>
+// for XParseGeometry()
+#include <X11/Xlib.h>
 
 #include "lilyterm.h"
 
 #define DEFAULT_FOREGROUND_COLOR "white"
 #define DEFAULT_BACKGROUND_COLOR "black"
 #define DEFAULT_CURSOR_COLOR "#44738B"
+
+#ifdef BSD
+// chars in a path name including nul
+// which is already defined in /usr/include/sys/syslimits.h
+// #define PATH_MAX 4096
+#endif
 
 typedef enum {
 	DISABLE_EMPTY_STR,
@@ -56,7 +64,6 @@ typedef enum {
 	NO_CHECK_MAX,
 	CHECK_MAX,
 } Check_Max;
-
 
 void init_command();
 void init_user_command(struct Window *win_data);
@@ -79,6 +86,6 @@ glong check_integer_value(GKeyFile *keyfile, const gchar *group_name, const gcha
 			  Check_Max check_max, glong max);
 gchar *check_string_value(GKeyFile *keyfile, const gchar *group_name,
 			  const gchar *key, gchar *original_value, gboolean free_original_value, Check_Empty enable_empty);
-gboolean check_color_value (const gchar *key_name, const gchar *color_name, GdkColor *color, const GdkColor *default_color);
+gboolean check_color_value (const gchar *key_name, const gchar *color_name, GdkRGBA *color, const GdkRGBA *default_color);
 gboolean accelerator_parse(const gchar *key_name, const gchar *key_value, guint *key, guint *mods);
 void create_save_failed_dialog(struct Window *win_data, gchar *message);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2010 Lu, Chao-Ming (Tetralet).  All rights reserved.
+ * Copyright (c) 2008-2014 Lu, Chao-Ming (Tetralet).  All rights reserved.
  *
  * This file is part of LilyTerm.
  *
@@ -21,8 +21,10 @@
 
 #include "dialog.h"
 #define TEMPSTR 6
+#define BORDER_SPACE 10
 
 extern GtkWidget *menu_active_window;
+GtkWidget *real_menu_active_window;
 extern struct ModKey modkeys[MOD];
 extern struct Page_Color page_color[PAGE_COLOR];
 extern GList* window_list;
@@ -31,13 +33,13 @@ extern gchar *key_groups[KEY_GROUP];
 extern struct KeyValue system_keys[KEYS];
 extern gchar *init_LC_CTYPE;
 extern struct Color color[COLOR];
-extern struct Color_Theme system_color_theme[THEME];
+extern struct GdkRGBA_Theme system_color_theme[THEME];
 
 gint dialog_activated = 0;
 gboolean force_to_quit = FALSE;
 gboolean using_kill = FALSE;
 
-GdkColor entry_not_find_bg_color = {0, 0xffff, 0xbcbc, 0xbcbc};
+GdkRGBA entry_not_find_bg_color = {0, 0xffff, 0xbcbc, 0xbcbc};
 
 // EDIT_LABEL,
 // FIND_STRING,
@@ -64,7 +66,7 @@ GdkColor entry_not_find_bg_color = {0, 0xffff, 0xbcbc, 0xbcbc};
 // CONFIRM_TO_CLOSE_A_WINDOW_WITH_CHILD_PROCESS,
 // CONFIRM_TO_EXIT_WITH_CHILD_PROCESS,
 // CONFIRM_TO_PASTE_TEXTS_TO_VTE_TERMINAL,
-// VIEW_THE_CLIPBOARD,
+// GENERAL_INFO,
 // PASTE_TEXTS_TO_EVERY_VTE_TERMINAL,
 // PASTE_GRABBED_KEY_TO_EVERY_VTE_TERMINAL,
 // SET_KEY_BINDING,
@@ -78,12 +80,25 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 	dialog_activated++;
 	// g_debug("Set dialog_activated = %d", dialog_activated);
 
+	real_menu_active_window = menu_active_window;
+
 	struct Dialog *dialog_data = g_new0(struct Dialog, 1);
 #ifdef SAFEMODE
-	if (menu_active_window)
+	if (real_menu_active_window)
 #endif
-		g_object_set_data(G_OBJECT(menu_active_window), "Dialog", dialog_data);
+		g_object_set_data(G_OBJECT(real_menu_active_window), "Dialog", dialog_data);
 	dialog_data->type = style;
+	gboolean selectable = FALSE;
+	// Backup the datas in clipboard.
+	// extern GtkClipboard *selection_clipboard;
+	// gchar *selection_clipboard_str = g_strdup(gtk_clipboard_wait_for_text(selection_clipboard));
+	extern GtkClipboard *selection_primary;
+	gchar *selection_primary_str = NULL;
+#ifdef SAFEMODE
+	if (selection_primary)
+#endif
+		selection_primary_str = g_strdup(gtk_clipboard_wait_for_text(selection_primary));
+
 	GtkResponseType dialog_response = GTK_RESPONSE_NONE;
 
 #ifdef SAFEMODE
@@ -95,10 +110,10 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 	// A critical error message for current_vte = NULL.
 
 #ifdef FATAL
-	// menu_active_window==NULL: it should NOT happen!
-	if (menu_active_window==NULL)
+	// real_menu_active_window==NULL: it should NOT happen!
+	if (real_menu_active_window==NULL)
 	{
-		gchar *err_msg = g_strdup_printf("dialog(%ld): menu_active_window = NULL\n\n"
+		gchar *err_msg = g_strdup_printf("dialog(%ld): real_menu_active_window = NULL\n\n"
 						  "Please report bug to %s, Thanks!",
 						  (glong)style, BUGREPORT);
 #ifdef SAFEMODE
@@ -106,13 +121,13 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 #endif
 			error_dialog(NULL, _("The following error occurred:"),
 				     "The following error occurred:",
-				     GTK_STOCK_DIALOG_ERROR, err_msg, NULL);
+				     GTK_FAKE_STOCK_DIALOG_ERROR, err_msg, NULL);
 		g_free(err_msg);
 		goto FINISH;
 	}
 	else
 #endif
-		win_data = (struct Window *)g_object_get_data(G_OBJECT(menu_active_window), "Win_Data");
+		win_data = (struct Window *)g_object_get_data(G_OBJECT(real_menu_active_window), "Win_Data");
 
 #ifdef SAFEMODE
 	if (win_data==NULL) goto FINISH;
@@ -177,9 +192,9 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      FALSE,
 				      10,
 				      GTK_RESPONSE_OK,
-				      GTK_STOCK_DIALOG_INFO,
+				      GTK_FAKE_STOCK_DIALOG_INFO,
 				      NULL,
-				      FALSE,
+				      selectable,
 				      0,
 				      TRUE,
 				      BOX_HORIZONTAL,
@@ -208,47 +223,53 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      FALSE,
 				      10,
 				      GTK_RESPONSE_OK,
-				      GTK_STOCK_FIND,
+				      GTK_FAKE_STOCK_FIND,
 				      NULL,
-				      FALSE,
+				      selectable,
 				      0,
 				      TRUE,
 				      BOX_VERTICALITY,
 				      5,
 				      dialog_data);
-			GtkWidget *hbox = gtk_hbox_new (FALSE, 0);
+			GtkWidget *hbox = dirty_gtk_hbox_new (FALSE, 0);
 			GtkWidget *label = gtk_label_new(_("Find: "));
 			gtk_box_pack_start (GTK_BOX(hbox), label, FALSE, FALSE, 0);
 			dialog_data->operate[0] = gtk_entry_new ();
 			g_signal_connect(G_OBJECT(dialog_data->operate[0]), "changed",
 						  G_CALLBACK(refresh_regex_settings), win_data);
+#ifdef USE_GDK_RGBA
+			GtkStyleContext *rc_style = gtk_widget_get_style_context (dialog_data->operate[0]);
+			// gtk_style_context_add_class(rc_style, GTK_STYLE_CLASS_ENTRY);
+			gtk_style_context_get_background_color (rc_style, 0, &(win_data->find_entry_bg_color));
+#else
+			GtkStyle *rc_style = gtk_widget_get_style (dialog_data->operate[0]);
+			win_data->find_entry_bg_color = rc_style->base[GTK_STATE_NORMAL];
+			g_object_unref(rc_style);
+#endif
 
-			// GtkRcStyle *rcstyle = gtk_widget_get_modifier_style(dialog_data->operate[0]);
-			GtkStyle *rcstyle = gtk_widget_get_style (dialog_data->operate[0]);
-			win_data->find_entry_bg_color = rcstyle->base[GTK_STATE_NORMAL];
 			win_data->find_entry_current_bg_color = win_data->find_entry_bg_color;
 			// print_color("win_data->find_entry_bg_color", win_data->find_entry_bg_color);
 
 			// gtk_entry_set_icon_from_stock (GTK_ENTRY (dialog_data->operate[0]),
-			//			       GTK_ENTRY_ICON_SECONDARY, GTK_STOCK_CLEAR);
+			//			       GTK_ENTRY_ICON_SECONDARY, GTK_FAKE_STOCK_CLEAR);
 
 			gtk_box_pack_start (GTK_BOX(hbox), dialog_data->operate[0], TRUE, TRUE, 0);
 
 			label = create_button_with_image(_("Find previous string"),
-							 GTK_STOCK_GO_UP,
+							 GTK_FAKE_STOCK_GO_UP,
 							 TRUE,
 							 (GSourceFunc)find_str,
 							 GINT_TO_POINTER(FIND_PREV));
 			gtk_box_pack_end (GTK_BOX(hbox), label, FALSE, FALSE, 0);
 			label = create_button_with_image(_("Find next string"),
-							 GTK_STOCK_GO_DOWN,
+							 GTK_FAKE_STOCK_GO_DOWN,
 							 TRUE,
 							 (GSourceFunc)find_str,
 							 GINT_TO_POINTER(FIND_NEXT));
 			gtk_box_pack_end (GTK_BOX(hbox), label, FALSE, FALSE, 0);
 			gtk_box_pack_start (GTK_BOX(dialog_data->box), hbox, FALSE, FALSE, 0);
 
-			hbox = gtk_hbox_new (FALSE, 15);
+			hbox = dirty_gtk_hbox_new (FALSE, 15);
 			gtk_box_pack_start (GTK_BOX(dialog_data->box), hbox, FALSE, FALSE, 0);
 
 			dialog_data->operate[1] = gtk_check_button_new_with_label(_("Case sensitive"));
@@ -268,7 +289,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 					 G_CALLBACK(refresh_regex_settings), win_data);
 			set_widget_can_not_get_focus(dialog_data->operate[1]);
 			set_widget_can_not_get_focus(dialog_data->operate[2]);
-			hbox = gtk_hbox_new (FALSE, 5);
+			hbox = dirty_gtk_hbox_new (FALSE, 5);
 			dialog_data->operate[3] = gtk_label_new(NULL);
 			gtk_widget_set_no_show_all (dialog_data->operate[3], TRUE);
 			gtk_box_pack_end (GTK_BOX(hbox), dialog_data->operate[3], FALSE, FALSE, 0);
@@ -281,7 +302,10 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 			if (vte_terminal_get_has_selection(VTE_TERMINAL(win_data->current_vte)))
 			{
 				extern GtkClipboard *selection_primary;
-				clipboard_str = gtk_clipboard_wait_for_text (selection_primary);
+#ifdef SAFEMODE
+				if (selection_primary)
+#endif
+					clipboard_str = gtk_clipboard_wait_for_text (selection_primary);
 				if (clipboard_str && (clipboard_str[0]!='\0'))
 					gtk_entry_set_text(GTK_ENTRY(dialog_data->operate[0]),
 							   strtok(clipboard_str, "\n\r"));
@@ -305,9 +329,9 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      FALSE,
 				      10,
 				      GTK_RESPONSE_OK,
-				      GTK_STOCK_DIALOG_INFO,
+				      GTK_FAKE_STOCK_DIALOG_INFO,
 				      NULL,
-				      FALSE,
+				      selectable,
 				      0,
 				      TRUE,
 				      BOX_VERTICALITY,
@@ -323,31 +347,45 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 					 G_CALLBACK(paste_text_to_vte_terminal), dialog_data);
 
 			// Check Button: Append a <NewLine> to the end of the text
-			GtkWidget *hbox = gtk_hbox_new (FALSE, 5);
+			GtkWidget *hbox = dirty_gtk_hbox_new (FALSE, 5);
 			gtk_box_pack_start (GTK_BOX(dialog_data->box), hbox, FALSE, FALSE, 0);
 			dialog_data->operate[1] = gtk_check_button_new_with_label(_("Append a <NewLine> to the end of the text."));
 			gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON(dialog_data->operate[1]), TRUE);
 			gtk_box_pack_end (GTK_BOX(hbox), dialog_data->operate[1], FALSE, FALSE, 0);
 
 			// <Paste> and <Esc> Button
-			GtkWidget *paste_button = gtk_button_new_from_stock (GTK_STOCK_PASTE);
+#ifdef HAVE_GTK_DIALOG_GET_ACTION_AREA
+			GtkWidget *paste_button = gtk_button_new_from_stock (GTK_FAKE_STOCK_PASTE);
 			if (gtk_alternative_dialog_button_order(NULL))
 			{
 				gtk_box_pack_end (GTK_BOX(gtk_dialog_get_action_area(GTK_DIALOG(dialog_data->window))),
 						  paste_button, FALSE, FALSE, 0);
-				gtk_dialog_add_button (GTK_DIALOG(dialog_data->window), GTK_STOCK_QUIT, GTK_RESPONSE_CANCEL);
+				gtk_dialog_add_button (GTK_DIALOG(dialog_data->window), GTK_FAKE_STOCK_QUIT, GTK_RESPONSE_CANCEL);
 			}
 			else
 			{
-				gtk_dialog_add_button (GTK_DIALOG(dialog_data->window), GTK_STOCK_QUIT, GTK_RESPONSE_CANCEL);
+				gtk_dialog_add_button (GTK_DIALOG(dialog_data->window), GTK_FAKE_STOCK_QUIT, GTK_RESPONSE_CANCEL);
 				gtk_box_pack_end (GTK_BOX(gtk_dialog_get_action_area(GTK_DIALOG(dialog_data->window))),
 						  paste_button, FALSE, FALSE, 0);
 			}
+#else
+			GtkWidget *paste_button;
+			if (gtk_alternative_dialog_button_order(NULL))
+			{
+				gtk_dialog_add_button (GTK_DIALOG(dialog_data->window), GTK_FAKE_STOCK_QUIT, GTK_RESPONSE_CANCEL);
+				paste_button = gtk_dialog_add_button (GTK_DIALOG(dialog_data->window), GTK_FAKE_STOCK_PASTE, GTK_RESPONSE_OK);
+			}
+			else
+			{
+				paste_button = gtk_dialog_add_button (GTK_DIALOG(dialog_data->window), GTK_FAKE_STOCK_PASTE, GTK_RESPONSE_OK);
+				gtk_dialog_add_button (GTK_DIALOG(dialog_data->window), GTK_FAKE_STOCK_QUIT, GTK_RESPONSE_CANCEL);
+			}
+			gtk_dialog_set_response_sensitive(GTK_DIALOG(dialog_data->window), GTK_RESPONSE_OK, FALSE);
+#endif
 			g_signal_connect(G_OBJECT(paste_button), "clicked",
 					 G_CALLBACK(paste_text_to_vte_terminal), dialog_data);
-
 			// <Grab keys> Button
-			add_secondary_button(dialog_data->window, _("Grab keys"), GTK_RESPONSE_OK, GTK_STOCK_REFRESH);
+			add_secondary_button(dialog_data->window, _("Grab keys"), GTK_RESPONSE_OK, GTK_FAKE_STOCK_REFRESH);
 			break;
 		}
 		case PASTE_GRABBED_KEY_TO_EVERY_VTE_TERMINAL:
@@ -364,9 +402,9 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      FALSE,
 				      10,
 				      GTK_RESPONSE_CANCEL,
-				      GTK_STOCK_DIALOG_INFO,
+				      GTK_FAKE_STOCK_DIALOG_INFO,
 				      temp_str[0],
-				      FALSE,
+				      selectable,
 				      0,
 				      TRUE,
 				      BOX_VERTICALITY,
@@ -382,7 +420,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 					 G_CALLBACK(grab_key_press), dialog_data);
 
 			// <Switch> Button
-			add_secondary_button(dialog_data->window, _("Entry"), GTK_RESPONSE_OK, GTK_STOCK_REFRESH);
+			add_secondary_button(dialog_data->window, _("Entry"), GTK_RESPONSE_OK, GTK_FAKE_STOCK_REFRESH);
 			break;
 		}
 		case ADD_NEW_LOCALES:
@@ -395,9 +433,9 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      FALSE,
 				      10,
 				      GTK_RESPONSE_OK,
-				      GTK_STOCK_DIALOG_INFO,
+				      GTK_FAKE_STOCK_DIALOG_INFO,
 				      NULL,
-				      FALSE,
+				      selectable,
 				      0,
 				      TRUE,
 				      BOX_VERTICALITY,
@@ -407,7 +445,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 			// TRANSLATE NOTE: For example, replace "zh_TW" with "ru_RU", replace "zh_TW.Big5" with "ru_RU.KOI8-R",
 			// TRANSLATE NOTE: or replace "zh_TW.UTF-8" with "ru_RU.UTF-8".
 			gchar *contents = _("The default locale used when initing a Vte Terminal.\n"
-				  	    "You may use \"zh_TW\", \"zh_TW.Big5\", or \"zh_TW.UTF-8\" here.");
+					    "You may use \"zh_TW\", \"zh_TW.Big5\", or \"zh_TW.UTF-8\" here.");
 			dialog_data->operate[0] = create_entry_widget (dialog_data->box,
 								  contents,
 								  _("Default locale:"),
@@ -427,6 +465,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 								  TRUE);
 			break;
 		}
+#if defined(ENABLE_VTE_BACKGROUND) || defined(FORCE_ENABLE_VTE_BACKGROUND)
 		case CHANGE_BACKGROUND_SATURATION:				// 2
 		{
 			create_dialog(_("Change the saturation of background"),
@@ -437,9 +476,9 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      TRUE,
 				      10,
 				      GTK_RESPONSE_OK,
-				      GTK_STOCK_DIALOG_INFO,
+				      GTK_FAKE_STOCK_DIALOG_INFO,
 				      _("Change the Saturation of background:"),
-				      FALSE,
+				      selectable,
 				      0,
 				      TRUE,
 				      BOX_VERTICALITY,
@@ -459,6 +498,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 
 			break;
 		}
+#endif
 #ifdef ENABLE_GDKCOLOR_TO_STRING
 		case CHANGE_THE_FOREGROUND_COLOR:				// 9
 		{
@@ -472,7 +512,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      GTK_RESPONSE_OK,
 				      NULL,
 				      NULL,
-				      FALSE,
+				      selectable,
 				      0,
 				      FALSE,
 				      BOX_HORIZONTAL,
@@ -483,6 +523,8 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				dialog_data->original_color = win_data->custom_color_theme[win_data->color_theme_index].color[color_index];
 			else
 				dialog_data->original_color = system_color_theme[win_data->color_theme_index].color[color_index];
+			// g_debug("win_data->use_custom_theme = %d", win_data->use_custom_theme);
+			// print_color(-1, "ORIG: dialog_data->original_color", dialog_data->original_color);
 			create_color_selection_widget(dialog_data, (GSourceFunc)adjust_vte_color, win_data->current_vte);
 			break;
 		}
@@ -497,7 +539,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      GTK_RESPONSE_OK,
 				      NULL,
 				      NULL,
-				      FALSE,
+				      selectable,
 				      0,
 				      FALSE,
 				      BOX_HORIZONTAL,
@@ -521,14 +563,23 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      GTK_RESPONSE_OK,
 				      NULL,
 				      NULL,
-				      FALSE,
+				      selectable,
 				      0,
 				      FALSE,
-				      BOX_HORIZONTAL,
+				      BOX_VERTICALITY,
 				      0,
 				      dialog_data);
 			dialog_data->original_color = win_data->cursor_color;
 			create_color_selection_widget(dialog_data, (GSourceFunc)adjust_vte_color, win_data->current_vte);
+			dialog_data->original_custom_cursor_color = win_data->custom_cursor_color;
+#if defined(USE_OLD_GTK_COLOR_SELECTION) || defined(UNIT_TEST)
+			// ---- Create the [Drawn the text under the cursor with foreground and background colors reversed] check button ----
+			dialog_data->custom_cursor_color_checkbox = gtk_check_button_new_with_label(_("Drawn the text under the cursor with foreground and background colors reversed"));
+			gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON(dialog_data->custom_cursor_color_checkbox), ! win_data->custom_cursor_color);
+			gtk_box_pack_start (GTK_BOX(dialog_data->box), dialog_data->custom_cursor_color_checkbox, FALSE, FALSE, 10);
+			g_signal_connect(G_OBJECT(dialog_data->custom_cursor_color_checkbox), "toggled",
+						  G_CALLBACK(update_custom_cursor_color), win_data);
+#endif
 			break;
 		case CHANGE_THE_ANSI_COLORS:					// 9
 		{
@@ -546,7 +597,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      GTK_RESPONSE_OK,
 				      NULL,
 				      NULL,
-				      FALSE,
+				      selectable,
 				      0,
 				      FALSE,
 				      BOX_VERTICALITY,
@@ -559,13 +610,14 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				dialog_data->original_color = win_data->custom_color_theme[win_data->color_theme_index].color[color_index];
 			else
 				dialog_data->original_color = system_color_theme[win_data->color_theme_index].color[color_index];
+#ifdef USE_OLD_GTK_COLOR_SELECTION
 			create_color_selection_widget(dialog_data, (GSourceFunc)adjust_vte_color, win_data->current_vte);
-
+#endif
 			// ---- Create the Range Scale ----
 			GtkWidget *label = gtk_label_new(_("The brightness of ANSI colors:"));
-			GtkWidget *box = gtk_hbox_new (FALSE, 0);
+			GtkWidget *box = dirty_gtk_hbox_new (FALSE, 0);
 
-			GtkWidget *vbox = gtk_vbox_new (FALSE, 0);
+			GtkWidget *vbox = dirty_gtk_vbox_new (FALSE, 0);
 			gtk_box_pack_start (GTK_BOX(dialog_data->box), vbox, FALSE, FALSE, 10);
 
 			gtk_box_pack_start (GTK_BOX(box), label, FALSE, FALSE, 0);
@@ -579,7 +631,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 			dialog_data->original_color_brightness_inactive = win_data->color_brightness_inactive;
 
 			label = gtk_label_new(_("ANSI Colors:"));
-			box = gtk_hbox_new (FALSE, 0);
+			box = dirty_gtk_hbox_new (FALSE, 0);
 			gtk_box_pack_start (GTK_BOX(box), label, FALSE, FALSE, 0);
 
 			// ---- Create the [Invert Color] check button ----
@@ -594,16 +646,32 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 			dialog_data->original_use_custom_theme = win_data->use_custom_theme;
 
 			// ---- Create the ANSI color buttons ----
+#ifdef USE_GTK_GRID
+			dialog_data->ansi_table = gtk_grid_new();
+			gtk_grid_set_column_homogeneous(GTK_GRID(dialog_data->ansi_table), TRUE);
+#else
 			dialog_data->ansi_table = gtk_table_new (2, COLOR/2, TRUE);
+#endif
 
 			gint i;
 			for (i=COLOR-1; i>=0; i--)
 			{
+#ifdef USE_OLD_GTK_COLOR_SELECTION
 				dialog_data->color_button[i] = gtk_button_new();
+				g_signal_connect(G_OBJECT(dialog_data->color_button[i]), "clicked", G_CALLBACK(update_ansi_color_info), GINT_TO_POINTER (i));
+#else
+				GdkRGBA color = {0};
+				dialog_data->color_button[i] = gtk_color_button_new_with_rgba(&color);
+				g_signal_connect(G_OBJECT(dialog_data->color_button[i]), "color-set", G_CALLBACK(adjust_vte_color_sample), GINT_TO_POINTER (i));
+#endif
+#ifdef USE_GTK_GRID
+				gtk_grid_attach(GTK_GRID(dialog_data->ansi_table), dialog_data->color_button[i],
+						(COLOR-1-i)%(COLOR/2), (COLOR-1-i)/(COLOR/2), 1, 1);
+#else
 				gtk_table_attach_defaults(GTK_TABLE(dialog_data->ansi_table), dialog_data->color_button[i],
 							  (COLOR-1-i)%(COLOR/2), (COLOR-1-i)%(COLOR/2)+1,
 							  (COLOR-1-i)/(COLOR/2), (COLOR-1-i)/(COLOR/2)+1);
-				g_signal_connect(G_OBJECT(dialog_data->color_button[i]), "clicked", G_CALLBACK(update_ansi_color_info), GINT_TO_POINTER (i));
+#endif
 			}
 			init_dialog_ansi_colors_from_win_data(win_data, dialog_data);
 			create_theme_color_data(dialog_data->ansi_colors, dialog_data->ansi_colors_orig,
@@ -649,7 +717,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      GTK_RESPONSE_OK,
 				      NULL,
 				      NULL,
-				      FALSE,
+				      selectable,
 				      0,
 				      FALSE,
 				      BOX_HORIZONTAL,
@@ -782,9 +850,9 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      FALSE,
 				      10,
 				      GTK_RESPONSE_OK,
-				      GTK_STOCK_DIALOG_QUESTION,
+				      GTK_FAKE_STOCK_DIALOG_QUESTION,
 				      _("You are about to close multi tabs. Continue anyway?"),
-				      FALSE,
+				      selectable,
 				      0,
 				      TRUE,
 				      create_entry_hbox,
@@ -808,7 +876,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      GTK_RESPONSE_OK,
 				      NULL,
 				      temp_str[0],
-				      FALSE,
+				      selectable,
 				      0,
 				      FALSE,
 				      BOX_VERTICALITY,
@@ -862,7 +930,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 			g_signal_connect(G_OBJECT(tree_selection), "changed", G_CALLBACK(update_key_info), dialog_data);
 
 			// Add the combo box to frame
-			GtkWidget *hbox = gtk_hbox_new (FALSE, 0);
+			GtkWidget *hbox = dirty_gtk_hbox_new (FALSE, 0);
 			GtkWidget *label = gtk_label_new(_("Key Group: "));
 			gtk_box_pack_start (GTK_BOX(hbox), label, FALSE, FALSE, 0);
 			dialog_data->operate[0] = gtk_label_new(NULL);
@@ -871,9 +939,11 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 
 			//// GtkWidget *vbox = create_frame_widget(dialog_data, NULL, hbox, combo, 0);
 			GtkWidget *vbox = create_frame_widget(dialog_data, NULL, hbox, dialog_data->treeview, 0);
-			hbox = gtk_hbox_new (FALSE, 0);
+			hbox = dirty_gtk_hbox_new (FALSE, 0);
+			GtkWidget *label_vbox = dirty_gtk_vbox_new (FALSE, 0);
 			label = gtk_label_new(_("Note: "));
-			gtk_box_pack_start (GTK_BOX(hbox), label, FALSE, FALSE, 0);
+			gtk_box_pack_start (GTK_BOX(label_vbox), label, FALSE, FALSE, 0);
+			gtk_box_pack_start (GTK_BOX(hbox), label_vbox, FALSE, FALSE, 0);
 			dialog_data->operate[1] = gtk_label_new(NULL);
 			set_markup_key_value(TRUE, "dark green", "", dialog_data->operate[1]);
 			gtk_box_pack_start (GTK_BOX(hbox), dialog_data->operate[1], FALSE, FALSE, 0);
@@ -888,13 +958,13 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 			g_signal_connect(G_OBJECT(dialog_data->window), "key-press-event",
 					 G_CALLBACK(deal_dialog_key_press), dialog_data);
 
-			dialog_data->operate[3] = create_button_with_image("", GTK_STOCK_CLOSE, FALSE,
+			dialog_data->operate[3] = create_button_with_image("", GTK_FAKE_STOCK_CLOSE, FALSE,
 								      (GSourceFunc)clear_key_group, dialog_data);
 			gtk_box_pack_end (GTK_BOX(dialog_data->box), dialog_data->operate[3], TRUE, TRUE, 0);
 			gtk_widget_set_no_show_all (dialog_data->operate[3], TRUE);
 
 			label = create_button_with_image(_("Disable all the function keys."),
-							 GTK_STOCK_CLOSE, FALSE, (GSourceFunc)clear_key_group_all, dialog_data);
+							 GTK_FAKE_STOCK_CLOSE, FALSE, (GSourceFunc)clear_key_group_all, dialog_data);
 			gtk_box_pack_end (GTK_BOX(dialog_data->box), label, TRUE, TRUE, 0);
 
 			// Trying to get correct size of dialog_data->treeview, then put it into a gtk_scrolled_window
@@ -902,6 +972,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 
 			GtkRequisition requisition;
 			gtk_widget_get_child_requisition (dialog_data->treeview, &requisition);
+			requisition.height += BORDER_SPACE;
 
 			GtkWidget *scrolled_window = gtk_scrolled_window_new (NULL, NULL);
 			gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (scrolled_window),
@@ -920,6 +991,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 		}
 		case USAGE_MESSAGE:						// 5
 		{
+			selectable = TRUE;
 			gchar *str[18] = {NULL};
 			gchar *temp_str;
 
@@ -936,7 +1008,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      GTK_RESPONSE_OK,
 				      NULL,
 				      NULL,
-				      TRUE,
+				      selectable,
 				      0,
 				      FALSE,
 				      BOX_VERTICALITY,
@@ -952,11 +1024,11 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 			temp_str =_("Don't forget to save your settings after making any change!");
 			str[3] = convert_text_to_html (&temp_str, FALSE, "darkred", "tt", "b", NULL);
 			str[4] = g_strdup_printf("%s\n\n%s", str[2], str[3]);
-			dialog_data->operate[0] = add_text_to_notebook(notebook, _("Usage"), GTK_STOCK_HELP, str[4]);
+			dialog_data->operate[0] = add_text_to_notebook(notebook, _("Usage"), GTK_FAKE_STOCK_HELP, str[4]);
 
 			// Shortcut Keys
 			str[5] = get_help_message_key_binding(TRUE);
-			dialog_data->operate[1] = add_text_to_notebook(notebook, _("Key binding"), GTK_STOCK_PREFERENCES, str[5]);
+			dialog_data->operate[1] = add_text_to_notebook(notebook, _("Key binding"), GTK_FAKE_STOCK_PREFERENCES, str[5]);
 
 			// License
 			// TRANSLATE NOTE: The following license declaration is just a notice, not full license text.
@@ -977,7 +1049,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 						   "along with %s.  If not, see <http://www.gnu.org/licenses/>."),
 						   "2008", YEAR, AUTHOR, PACKAGE, PACKAGE, PACKAGE);
 			str[7] = convert_text_to_html(&str[6], FALSE, NULL, "tt", NULL);
-			dialog_data->operate[2] = add_text_to_notebook(notebook, _("License"), GTK_STOCK_DIALOG_AUTHENTICATION, str[7]);
+			dialog_data->operate[2] = add_text_to_notebook(notebook, _("License"), GTK_FAKE_STOCK_DIALOG_AUTHENTICATION, str[7]);
 
 			// Translators
 			temp_str = "Adrian Buyssens: Flemish/Dutch translation.\n"
@@ -992,7 +1064,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				   "Slavko: Slovak translation.\n"
 				   "Vladimir Smolyar: Russian and Ukrainian translations.";
 			str[8] = convert_text_to_html(&temp_str, FALSE, NULL, "tt", NULL);
-			dialog_data->operate[3] = add_text_to_notebook(notebook, _("Translators"), GTK_STOCK_CONVERT, str[8]);
+			dialog_data->operate[3] = add_text_to_notebook(notebook, _("Translators"), GTK_FAKE_STOCK_CONVERT, str[8]);
 
 			// About
 			// TRANSLATE NOTE: Please be care of the spacing when translating the following site informatoins.
@@ -1009,7 +1081,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 						   AUTHOR, BUGREPORT, str[9] ,str[10], str[13],
 						   str[14], str[15]);
 			str[17] = convert_text_to_html(&str[16], FALSE, NULL, "tt", NULL);
-			dialog_data->operate[4] = add_text_to_notebook(notebook, _("About"), GTK_STOCK_ABOUT, str[17]);
+			dialog_data->operate[4] = add_text_to_notebook(notebook, _("About"), GTK_FAKE_STOCK_ABOUT, str[17]);
 
 			show_usage_text(notebook, NULL, 0, dialog_data);
 			g_signal_connect(G_OBJECT(notebook), "switch-page", G_CALLBACK(show_usage_text), dialog_data);
@@ -1020,6 +1092,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 		}
 		case CONFIRM_TO_CLOSE_RUNNING_APPLICATION:			// 7
 		{
+			selectable = TRUE;
 			// get the command line of running foreground program
 			pid_t tpgid = get_tpgid(page_data->pid);
 			temp_str[0] = get_cmdline(tpgid);
@@ -1027,7 +1100,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 			temp_str[2] = g_markup_escape_text(temp_str[1], -1);
 			temp_str[3] = g_strdup_printf(_("There is still a running foreground program on #%d tab:"),
 							 page_data->page_no+1);
-			temp_str[4] = g_strdup_printf(_("Terminate it by using `kill -9 %d' is recommend "
+			temp_str[4] = g_strdup_printf(_("Terminate it by using `kill -9 %d' is recommended "
 							    "if it is non-response."), page_data->pid);
 			temp_str[5] = g_strconcat(temp_str[3],
 						  "\n\n\t<b><span foreground=\"blue\">",
@@ -1052,9 +1125,9 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      FALSE,
 				      10,
 				      GTK_RESPONSE_OK,
-				      GTK_STOCK_DIALOG_QUESTION,
+				      GTK_FAKE_STOCK_DIALOG_QUESTION,
 				      temp_str[5],
-				      TRUE,
+				      selectable,
 				      70,
 				      TRUE,
 				      create_entry_hbox,
@@ -1098,9 +1171,9 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      TRUE,
 				      10,
 				      GTK_RESPONSE_OK,
-				      GTK_STOCK_DIALOG_INFO,
+				      GTK_FAKE_STOCK_DIALOG_INFO,
 				      text,
-				      FALSE,
+				      selectable,
 				      0,
 				      TRUE,
 				      BOX_VERTICALITY,
@@ -1141,11 +1214,13 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				if (win_data->use_custom_theme)
 					set_new_ansi_color(win_data->current_vte, dialog_data->ansi_colors,
 							   win_data->custom_color_theme[win_data->color_theme_index].color,
-							   value, win_data->invert_color, FALSE, win_data->cursor_color, TRUE);
+							   value, win_data->invert_color, FALSE, win_data->custom_cursor_color,
+							   win_data->cursor_color, TRUE);
 				else
 					set_new_ansi_color(win_data->current_vte, dialog_data->ansi_colors,
 							   system_color_theme[win_data->color_theme_index].color,
-							   value, win_data->invert_color, FALSE, win_data->cursor_color, TRUE);
+							   value, win_data->invert_color, FALSE, win_data->custom_cursor_color,
+							   win_data->cursor_color, TRUE);
 			}
 			create_dialog(title[0],
 				      title[1],
@@ -1155,9 +1230,9 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      TRUE,
 				      10,
 				      GTK_RESPONSE_OK,
-				      GTK_STOCK_DIALOG_INFO,
+				      GTK_FAKE_STOCK_DIALOG_INFO,
 				      title[0],
-				      FALSE,
+				      selectable,
 				      0,
 				      TRUE,
 				      BOX_VERTICALITY,
@@ -1189,12 +1264,12 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 			create_dialog(_("Confirm to execute -e/-x/--execute command"),
 				      "Confirm to execute -e/-x/--execute command",
 				      DIALOG_OK_CANCEL,
-				      menu_active_window,
+				      real_menu_active_window,
 				      TRUE,
 				      FALSE,
 				      10,
 				      GTK_RESPONSE_CANCEL,
-				      GTK_STOCK_DIALOG_WARNING,
+				      GTK_FAKE_STOCK_DIALOG_WARNING,
 				      temp_str[1],
 				      FALSE,
 				      70,
@@ -1204,6 +1279,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      dialog_data);
 			break;
 		case CONFIRM_TO_CLOSE_A_TAB_WITH_CHILD_PROCESS:		// 23
+			selectable = TRUE;
 			// get the command line of running foreground program
 			temp_str[0] = g_strdup_printf(_("The following programs are still running under #%d tab:"),
 							 page_data->page_no+1);
@@ -1230,11 +1306,11 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      FALSE,
 				      10,
 				      GTK_RESPONSE_CANCEL,
-				      GTK_STOCK_DIALOG_QUESTION,
+				      GTK_FAKE_STOCK_DIALOG_QUESTION,
 				      temp_str[3],
 				      TRUE,
 				      70,
-				      TRUE,
+				      selectable,
 				      BOX_VERTICALITY,
 				      5,
 				      dialog_data);
@@ -1244,6 +1320,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 
 			break;
 		case CONFIRM_TO_CLOSE_A_WINDOW_WITH_CHILD_PROCESS:		// 24
+			selectable = TRUE;
 			temp_str[0] = g_markup_escape_text(win_data->temp_data, -1);
 			temp_str[1] = g_strconcat(_("The following programs are still running under this window:"),
 						  "\n\n<b><span foreground=\"blue\">",
@@ -1259,9 +1336,9 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      FALSE,
 				      10,
 				      GTK_RESPONSE_CANCEL,
-				      GTK_STOCK_DIALOG_QUESTION,
+				      GTK_FAKE_STOCK_DIALOG_QUESTION,
 				      temp_str[1],
-				      TRUE,
+				      selectable,
 				      70,
 				      TRUE,
 				      BOX_VERTICALITY,
@@ -1271,6 +1348,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 			create_SIGKILL_and_EXIT_widget(dialog_data, TRUE, create_entry_hbox, _("those tabs"));
 			break;
 		case CONFIRM_TO_EXIT_WITH_CHILD_PROCESS:			// 25
+			selectable = TRUE;
 			temp_str[0]  = g_strdup_printf(_("Confirm to close %s"), PACKAGE);
 			temp_str[1]  = g_strdup_printf("Confirm to close %s", PACKAGE);
 			// get the command line of running foreground program
@@ -1291,9 +1369,9 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      FALSE,
 				      10,
 				      GTK_RESPONSE_CANCEL,
-				      GTK_STOCK_DIALOG_QUESTION,
+				      GTK_FAKE_STOCK_DIALOG_QUESTION,
 				      temp_str[4],
-				      TRUE,
+				      selectable,
 				      70,
 				      TRUE,
 				      BOX_VERTICALITY,
@@ -1317,9 +1395,9 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      FALSE,
 				      10,
 				      GTK_RESPONSE_OK,
-				      GTK_STOCK_DIALOG_QUESTION,
+				      GTK_FAKE_STOCK_DIALOG_QUESTION,
 				      temp_str[0],
-				      FALSE,
+				      selectable,
 				      70,
 				      FALSE,
 				      BOX_NONE,
@@ -1327,15 +1405,37 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      dialog_data);
 			// <Join and paste> Button
 			GtkWidget *join_button = gtk_dialog_add_button (GTK_DIALOG(dialog_data->window),
-									_("Join and paste"), GTK_RESPONSE_ACCEPT);
+									_("Join"), GTK_RESPONSE_ACCEPT);
+#ifdef ENABLE_SET_TOOLTIP_TEXT
+			gtk_widget_set_tooltip_text(join_button, _("Remove '<Return>' in the text"));
+#endif
 			gtk_button_set_image (GTK_BUTTON(join_button),
-					      gtk_image_new_from_stock(GTK_STOCK_PASTE, GTK_ICON_SIZE_BUTTON));
+					      gtk_image_new_from_stock(GTK_FAKE_STOCK_PASTE, GTK_ICON_SIZE_BUTTON));
+#ifdef HAVE_GTK_DIALOG_GET_ACTION_AREA
 			gtk_button_box_set_child_secondary (GTK_BUTTON_BOX(gtk_dialog_get_action_area(GTK_DIALOG(dialog_data->window))),
 							    join_button, TRUE);
+#endif
+
+			// <Strip and paste> Button
+			GtkWidget *strip_button = gtk_dialog_add_button (GTK_DIALOG(dialog_data->window),
+									_("Strip"), GTK_RESPONSE_YES);
+#ifdef ENABLE_SET_TOOLTIP_TEXT
+			gtk_widget_set_tooltip_text(strip_button, _("Remove '<Return>', \"\\<Return>\", and \"\\<Return><<Space>\" in the text, then join '<Tab>' and '<Space>' into a single '<Space>'"));
+#endif
+			gtk_button_set_image (GTK_BUTTON(strip_button),
+					      gtk_image_new_from_stock(GTK_FAKE_STOCK_PASTE, GTK_ICON_SIZE_BUTTON));
+#ifdef HAVE_GTK_DIALOG_GET_ACTION_AREA
+			gtk_button_box_set_child_secondary (GTK_BUTTON_BOX(gtk_dialog_get_action_area(GTK_DIALOG(dialog_data->window))),
+							    strip_button, TRUE);
+#endif
 			break;
-		case VIEW_THE_CLIPBOARD:
-			create_dialog(_("Clipboard"),
-				      "Clipboard",
+		case GENERAL_INFO:
+		{
+			selectable = TRUE;
+			gchar **strings = split_string(win_data->temp_data, "\x10", 3);
+			if (strings==NULL) goto FINISH;
+			create_dialog(strings[0],
+				      strings[1],
 				      DIALOG_OK,
 				      page_data->window,
 				      FALSE,
@@ -1343,14 +1443,16 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				      10,
 				      GTK_RESPONSE_OK,
 				      NULL,
-				      win_data->temp_data,
-				      FALSE,
+				      strings[2],
+				      selectable,
 				      70,
 				      FALSE,
 				      BOX_NONE,
 				      0,
 				      dialog_data);
+			g_strfreev(strings);
 			break;
+		}
 		default:
 #ifdef FATAL
 			print_switch_out_of_range_error_dialog("dialog", "style", style);
@@ -1379,6 +1481,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 #else
 	dialog_response = gtk_dialog_run(GTK_DIALOG(dialog_data->window));
 #endif
+
 	switch (dialog_response)
 	{
 		case GTK_RESPONSE_OK:
@@ -1424,8 +1527,10 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 					refresh_locale_and_encoding_list(win_data);
 					break;
 				}
+#if defined(ENABLE_VTE_BACKGROUND) || defined(FORCE_ENABLE_VTE_BACKGROUND)
 				// style  2: change the saturation of background
 				case CHANGE_BACKGROUND_SATURATION:
+#endif
 				// style  9: change the foreground color
 				case CHANGE_THE_FOREGROUND_COLOR:
 				// style 10: change the background color
@@ -1446,22 +1551,38 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				case CHANGE_THE_TEXT_COLOR_OF_NORMAL_TEXT:
 				{
 					// g_debug("Setting the colors. Type = %d", style);
+					GdkRGBA new_color;
 					switch (style)
 					{
+						case CHANGE_THE_FOREGROUND_COLOR:
+						case CHANGE_THE_BACKGROUND_COLOR:
+						case CHANGE_THE_CURSOR_COLOR:
+							gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(dialog_data->operate[0]), &new_color);
+							break;
+					}
+					switch (style)
+					{
+#if defined(ENABLE_VTE_BACKGROUND) || defined(FORCE_ENABLE_VTE_BACKGROUND)
 						case CHANGE_BACKGROUND_SATURATION:
 							win_data->background_saturation = gtk_range_get_value(GTK_RANGE(dialog_data->operate[0])) + 0.0005;
 							break;
+#endif
 #ifdef ENABLE_GDKCOLOR_TO_STRING
 						case CHANGE_THE_FOREGROUND_COLOR:
 							if (win_data->use_custom_theme == FALSE) clear_custom_colors_data(win_data, TRUE);
-							update_fg_bg_color(win_data, dialog_data->original_color, TRUE);
+							update_fg_bg_color(win_data, new_color, TRUE);
 							break;
 						case CHANGE_THE_BACKGROUND_COLOR:
 							if (win_data->use_custom_theme == FALSE) clear_custom_colors_data(win_data, FALSE);
-							update_fg_bg_color(win_data, dialog_data->original_color, FALSE);
+							update_fg_bg_color(win_data, new_color, FALSE);
 							break;
 						case CHANGE_THE_CURSOR_COLOR:
-							win_data->cursor_color = dialog_data->original_color;
+#ifdef USE_OLD_GTK_COLOR_SELECTION
+							win_data->custom_cursor_color = ! gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(dialog_data->custom_cursor_color_checkbox));
+#else
+							win_data->custom_cursor_color = TRUE;
+#endif
+							win_data->cursor_color = new_color;
 							break;
 						case CHANGE_THE_TEXT_COLOR_OF_WINDOW_TITLE:
 						case CHANGE_THE_TEXT_COLOR_OF_CMDLINE:
@@ -1471,7 +1592,8 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 						case CHANGE_THE_TEXT_COLOR_OF_NORMAL_TEXT:
 						{
 							gint page_color_type = style - CHANGE_THE_TEXT_COLOR_OF_WINDOW_TITLE;
-							gchar *new_color = gdk_color_to_string(&(dialog_data->original_color));
+							gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(dialog_data->operate[0]), &new_color);
+							gchar *new_color_str = dirty_gdk_rgba_to_string(&(new_color));
 
 							struct Page *tmp_page_data = NULL;
 							for (i=0; i<gtk_notebook_get_n_pages(GTK_NOTEBOOK(win_data->notebook)); i++)
@@ -1480,12 +1602,12 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 #ifdef SAFEMODE
 								if (tmp_page_data==NULL) goto DESTROY_WINDOW;
 #endif
-								if (page_data->tab_color == win_data->user_page_color[page_color_type])
-									page_data->tab_color = new_color;
+								if (tmp_page_data->tab_color == win_data->user_page_color[page_color_type])
+									tmp_page_data->tab_color = new_color_str;
 							}
 
 							g_free(win_data->user_page_color[page_color_type]);
-							win_data->user_page_color[page_color_type] = new_color;
+							win_data->user_page_color[page_color_type] = new_color_str;
 							break;
 						}
 #endif
@@ -1506,16 +1628,29 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 #endif
 							switch (style)
 							{
+#if defined(ENABLE_VTE_BACKGROUND) || defined(FORCE_ENABLE_VTE_BACKGROUND)
 								case CHANGE_BACKGROUND_SATURATION:
 									set_background_saturation (NULL, 0,
 												   win_data->background_saturation,
 												   tmp_page_data->vte);
 									break;
+#endif
 								case CHANGE_THE_FOREGROUND_COLOR:
 								case CHANGE_THE_BACKGROUND_COLOR:
+									adjust_vte_color(GTK_COLOR_CHOOSER(dialog_data->operate[0]),
+											 NULL,
+											 tmp_page_data->vte);
+									break;
 								case CHANGE_THE_CURSOR_COLOR:
-									adjust_vte_color(GTK_COLOR_SELECTION(dialog_data->operate[0]),
-													      tmp_page_data->vte);
+#ifdef USE_OLD_GTK_COLOR_SELECTION
+									adjust_vte_color(NULL,
+											 NULL,
+											 tmp_page_data->vte);
+#else
+									adjust_vte_color(GTK_COLOR_CHOOSER(dialog_data->operate[0]),
+											 NULL,
+											 tmp_page_data->vte);
+#endif
 									break;
 							}
 						}
@@ -1616,7 +1751,7 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 						//	" dialog_data->original_use_custom_theme = %d, win_data->use_custom_theme = %d",
 						//	dialog_data->original_have_custom_color, win_data->have_custom_color,
 						//	dialog_data->original_use_custom_theme, win_data->use_custom_theme);
-						if ((dialog_data->original_have_custom_color != win_data->have_custom_color) || 
+						if ((dialog_data->original_have_custom_color != win_data->have_custom_color) ||
 						    (dialog_data->original_use_custom_theme != win_data->use_custom_theme))
 							recreate_theme_menu_items(win_data);
 					}
@@ -1631,7 +1766,8 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 #ifdef SAFEMODE
 						if (page_data==NULL) goto DESTROY_WINDOW;
 #endif
-						set_vte_color(page_data->vte, default_vte_color, win_data->cursor_color, win_data->color, FALSE);
+						set_vte_color(page_data->vte, default_vte_color, win_data->custom_cursor_color,
+							      win_data->cursor_color, win_data->color, FALSE, FALSE);
 					}
 					// g_debug("win_data->color_brightness = %0.3f, win_data->color_brightness_inactive = %0.3f",
 					//	win_data->color_brightness, win_data->color_brightness_inactive);
@@ -1645,13 +1781,15 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 					win_data->dim_text = TRUE;
 					generate_all_color_datas(win_data);
 					set_vte_color(win_data->current_vte, use_default_vte_theme(win_data),
-						      win_data->cursor_color, win_data->color, FALSE);
+						      win_data->custom_cursor_color, win_data->cursor_color, win_data->color, FALSE, FALSE);
 					break;
 #endif
 			}
 			break;
 		}
 		case GTK_RESPONSE_ACCEPT:
+			break;
+		case GTK_RESPONSE_YES:
 			break;
 		default:
 		{
@@ -1662,14 +1800,17 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 				//	vte_terminal_search_set_gregex(VTE_TERMINAL(win_data->current_vte), NULL);
 				//	vte_terminal_search_find_previous(VTE_TERMINAL(win_data->current_vte));
 				//	break;
+#if defined(ENABLE_VTE_BACKGROUND) || defined(FORCE_ENABLE_VTE_BACKGROUND)
 				// style  2: change the saturation of background
 				case CHANGE_BACKGROUND_SATURATION:
+#endif
 				// style  9: change the foreground color
 				case CHANGE_THE_FOREGROUND_COLOR:
 				// style 10: change the background color
 				case CHANGE_THE_BACKGROUND_COLOR:
 				// style  9: change the cursor color
 				case CHANGE_THE_CURSOR_COLOR:
+#if defined(ENABLE_VTE_BACKGROUND) || defined(FORCE_ENABLE_VTE_BACKGROUND)
 					if (style==CHANGE_BACKGROUND_SATURATION)
 					{
 						win_data->transparent_background = dialog_data->original_transparent_background;
@@ -1679,21 +1820,17 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 									  win_data->background_saturation,
 									  win_data->current_vte);
 					}
-					switch (style)
-					{
-						case CHANGE_THE_FOREGROUND_COLOR:
-						case CHANGE_THE_BACKGROUND_COLOR:
-						case CHANGE_THE_CURSOR_COLOR:
-							dialog_data->original_color = dialog_data->original_color;
-							break;
-					}
-
+#endif
+					// print_color(-1, "RECOVER: dialog_data->original_color", dialog_data->original_color);
+					if (style==CHANGE_THE_CURSOR_COLOR)
+						win_data->custom_cursor_color = dialog_data->original_custom_cursor_color;
+#if defined(ENABLE_VTE_BACKGROUND) || defined(FORCE_ENABLE_VTE_BACKGROUND)
 					if (style!=CHANGE_BACKGROUND_SATURATION)
 					{
 						dialog_data->recover = TRUE;
-						adjust_vte_color(GTK_COLOR_SELECTION(dialog_data->operate[0]),
-										     win_data->current_vte);
+						adjust_vte_color(GTK_COLOR_CHOOSER(dialog_data->operate[0]), &(dialog_data->original_color), win_data->current_vte);
 					}
+#endif
 					break;
 				// style 4: get function key value
 				case SET_KEY_BINDING:
@@ -1749,13 +1886,15 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 					if (win_data->use_custom_theme)
 						set_new_ansi_color(win_data->current_vte, dialog_data->ansi_colors,
 								   win_data->custom_color_theme[win_data->color_theme_index].color,
-							           win_data->color_brightness, win_data->invert_color,
-								   use_default_vte_theme(win_data), win_data->cursor_color, FALSE);
+								   win_data->color_brightness, win_data->invert_color,
+								   use_default_vte_theme(win_data), win_data->custom_cursor_color,
+								   win_data->cursor_color, FALSE);
 					else
 						set_new_ansi_color(win_data->current_vte, dialog_data->ansi_colors,
 								   system_color_theme[win_data->color_theme_index].color,
-							           win_data->color_brightness, win_data->invert_color,
-								   use_default_vte_theme(win_data), win_data->cursor_color, FALSE);
+								   win_data->color_brightness, win_data->invert_color,
+								   use_default_vte_theme(win_data), win_data->custom_cursor_color,
+								   win_data->cursor_color, FALSE);
 					break;
 			}
 			break;
@@ -1767,8 +1906,23 @@ GtkResponseType dialog(GtkWidget *widget, gsize style)
 #ifdef SAFEMODE
 DESTROY_WINDOW:
 #endif
+	if (selectable)
+	{
+		extern GtkClipboard *selection_primary;
+		gchar *current_clipboard_str = NULL;
+#ifdef SAFEMODE
+		if (selection_primary)
+#endif
+			current_clipboard_str = gtk_clipboard_wait_for_text(selection_primary);
+		if ((current_clipboard_str!=NULL) && (current_clipboard_str[0]!='\0'))
+		{
+			g_free(selection_primary_str);
+			selection_primary_str = g_strdup(current_clipboard_str);
+		}
+	}
+
 	// destroy dialog.
-	// g_debug("dialog_data->window = %p", dialog_data->window);
+	// g_debug("destroy dialog: dialog_data->window = %p", dialog_data->window);
 	if ((dialog_response != GTK_RESPONSE_NONE) && (dialog_data->window))
 		gtk_widget_destroy(dialog_data->window);
 
@@ -1783,10 +1937,17 @@ DESTROY_WINDOW:
 	// for PASTE_GRABBED_KEY_TO_EVERY_VTE_TERMINAL Only...
 	win_data->enable_key_binding = enable_key_binding;
 
+	if (selectable)
+	{
+		if (selection_primary_str)
+			gtk_clipboard_set_text(selection_primary, selection_primary_str, -1);
+	}
+
 FINISH:
 	dialog_activated--;
 	// g_debug("Set dialog_activated = %d, gtk_widget_get_mapped(win_data->window) = %d", dialog_activated, gtk_widget_get_mapped(win_data->window));
 	g_free(dialog_data);
+	g_free(selection_primary_str);
 	for (i=0; i<TEMPSTR; i++) g_free(temp_str[i]);
 
 	if (window_list == NULL && (dialog_activated==0))
@@ -1820,15 +1981,30 @@ void init_dialog_ansi_colors_from_win_data(struct Window *win_data, struct Dialo
 	// print_color(i, "dialog_data->ansi_colors", dialog_data->ansi_colors_orig[i]);
 }
 
-void dialog_invert_color_theme(GtkWidget *menuitem, struct Window *win_data)
+#if defined(USE_OLD_GTK_COLOR_SELECTION) || defined(UNIT_TEST)
+void update_custom_cursor_color(GtkWidget *menuitem, struct Window *win_data)
 {
 #ifdef DETAIL
-	g_debug("! Launch dialog_invert_color_theme() with menuitem = %p", menuitem);
+	g_debug("! Launch update_custom_cursor_color() with menuitem = %p, win_data = %p", menuitem, win_data);
 #endif
 #ifdef SAFEMODE
 	if ((menuitem==NULL) || (win_data==NULL)) return;
 #endif
-	struct Dialog *dialog_data = (struct Dialog *)g_object_get_data(G_OBJECT(menu_active_window), "Dialog");
+
+	win_data->custom_cursor_color = ! gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(menuitem));
+	enable_custom_cursor_color(win_data->current_vte, win_data->custom_cursor_color, &(win_data->cursor_color));
+}
+#endif
+
+void dialog_invert_color_theme(GtkWidget *menuitem, struct Window *win_data)
+{
+#ifdef DETAIL
+	g_debug("! Launch dialog_invert_color_theme() with menuitem = %p, win_data = %p", menuitem, win_data);
+#endif
+#ifdef SAFEMODE
+	if ((menuitem==NULL) || (win_data==NULL)) return;
+#endif
+	struct Dialog *dialog_data = (struct Dialog *)g_object_get_data(G_OBJECT(real_menu_active_window), "Dialog");
 #ifdef SAFEMODE
 	if (dialog_data==NULL) return;
 #endif
@@ -1847,8 +2023,8 @@ void dialog_invert_color_theme(GtkWidget *menuitem, struct Window *win_data)
 	// g_debug("dialog_invert_color_theme(): win_data->color_brightness = %0.3f, win_data->color_brightness_inactive = %0.3f",
 	//	win_data->color_brightness, win_data->color_brightness_inactive);
 
-	set_new_ansi_color(win_data->current_vte, dialog_data->ansi_colors, dialog_data->ansi_colors_orig, 
-			   win_data->color_brightness, win_data->invert_color, FALSE, win_data->cursor_color, FALSE);
+	set_new_ansi_color(win_data->current_vte, dialog_data->ansi_colors, dialog_data->ansi_colors_orig, win_data->color_brightness,
+			   win_data->invert_color, FALSE, win_data->custom_cursor_color, win_data->cursor_color, FALSE);
 
 	// invert the brightness
 	gtk_range_set_value(GTK_RANGE(dialog_data->operate[1]), win_data->color_brightness);
@@ -1873,46 +2049,76 @@ void update_color_buttons(struct Window *win_data, struct Dialog *dialog_data)
 #ifdef SAFEMODE
 	if ((win_data==NULL) || (dialog_data==NULL)) return;
 #endif
+#ifdef USE_OLD_GTK_COLOR_SELECTION
 	// Get the default size of GTK_ICON_SIZE_MENU
 	gint width = 16, height = 16;
 	GtkSettings *settings = gtk_settings_get_default();
 	if (settings) gtk_icon_size_lookup_for_settings (settings, GTK_ICON_SIZE_MENU, &width, &height);
-
+#endif
 	// Get the color theme
-	GdkColor* temp_color;
+	GdkRGBA* temp_color;
 	if (win_data->use_custom_theme)
 		temp_color = win_data->custom_color_theme[win_data->color_theme_index].color;
 	else
 		temp_color = system_color_theme[win_data->color_theme_index].color;
-	
+
 	gint i, color_index;
 	for (i=COLOR-1; i>=0; i--)
 	{
 		color_index = get_color_index(win_data->invert_color, i);
+#ifdef USE_OLD_GTK_COLOR_SELECTION
 		GdkPixbuf *pixbuf = gdk_pixbuf_new (GDK_COLORSPACE_RGB, FALSE, 8, width, height);
+#  ifdef USE_GDK_RGBA
+		gdk_pixbuf_fill (pixbuf,
+				 (guint32)(temp_color[color_index].red   *0xFF) << 24 |
+				 (guint32)(temp_color[color_index].green *0xFF) << 16 |
+				 (guint32)(temp_color[color_index].blue  *0xFF) << 8);
+#  else
 		gdk_pixbuf_fill (pixbuf,
 				 (guint32) (temp_color[color_index].red   >> 8) << 24 |
 					   (temp_color[color_index].green >> 8) << 16 |
 					   (temp_color[color_index].blue  >> 8) << 8);
-				
+#  endif
+
 		GtkWidget *image = gtk_image_new_from_pixbuf (pixbuf);
-#ifdef SAFEMODE
+#  ifdef SAFEMODE
 		if (dialog_data->color_button[i])
-#endif
+#  endif
 			gtk_button_set_image(GTK_BUTTON(dialog_data->color_button[i]), image);
-#ifdef DEBUG
-		gchar *color_string = gdk_color_to_string(&(temp_color[color_index]));
-		gchar *temp_str =  g_strdup_printf("%s [%d] - %s", color[i].translation, color_index, color_string);
-#ifdef SAFEMODE
+#else
+#  ifdef SAFEMODE
 		if (dialog_data->color_button[i])
+#  endif
+#  ifdef USE_GTK_COLOR_CHOOSER
+			gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(dialog_data->color_button[i]), &(temp_color[color_index]));
+#  else
+			gtk_color_button_set_rgba(GTK_COLOR_BUTTON(dialog_data->color_button[i]), &(temp_color[color_index]));
+#  endif
 #endif
+#ifdef ENABLE_GDKCOLOR_TO_STRING
+#  ifdef DEBUG
+		gchar *color_string = dirty_gdk_rgba_to_string(&(temp_color[color_index]));
+		gchar *temp_str =  g_strdup_printf("%s [%d] - %s", color[i].translation, color_index, color_string);
+#    ifdef ENABLE_SET_TOOLTIP_TEXT
+#      ifdef SAFEMODE
+		if (dialog_data->color_button[i])
+#      endif
 			gtk_widget_set_tooltip_text(dialog_data->color_button[i], temp_str);
+#    endif
 		g_free(temp_str);
 		g_free(color_string);
-#else
-		gtk_widget_set_tooltip_text(dialog_data->color_button[i], color[i].translation);
+#  else
+#    ifdef ENABLE_SET_TOOLTIP_TEXT
+#      ifdef SAFEMODE
+		if (dialog_data->color_button[i])
+#      endif
+			gtk_widget_set_tooltip_text(dialog_data->color_button[i], color[i].translation);
+#    endif
+#  endif
 #endif
+#ifdef USE_OLD_GTK_COLOR_SELECTION
 		g_object_unref (pixbuf);
+#endif
 	}
 }
 
@@ -1954,7 +2160,7 @@ void clear_custom_colors_data(struct Window *win_data, gboolean update_fg)
 			win_data->custom_color_theme[i].color[j] = system_color_theme[i].color[j];
 }
 
-void update_fg_bg_color(struct Window *win_data, GdkColor color, gboolean update_fg)
+void update_fg_bg_color(struct Window *win_data, GdkRGBA color, gboolean update_fg)
 {
 #ifdef DETAIL
 	g_debug("! Launch update_fg_bg_color() with win_data = %p, update_fg = %d", win_data, update_fg);
@@ -1980,11 +2186,12 @@ void update_fg_bg_color(struct Window *win_data, GdkColor color, gboolean update
 		//	  marked for temporary.
 		// background_saturation =
 		//	gtk_color_selection_get_current_alpha(
-		//		GTK_COLOR_SELECTION(adjustment))/65535;
+		//		GTK_COLOR_CHOOSER(adjustment))/65535;
 	}
 
 	gint i, index = get_color_index(win_data->invert_color, color_index);
 	// g_debug("update_fg_bg_color(): index = %d,  win_data->invert_color = %d", index, win_data->invert_color);
+	// print_color(-1, "SAVE: color", color);
 	for (i=0; i<THEME; i++)
 	{
 		win_data->custom_color_theme[i].color[index] = color;
@@ -1996,7 +2203,7 @@ void update_fg_bg_color(struct Window *win_data, GdkColor color, gboolean update
 		// print_color (temp_str, win_data->custom_color_theme[i].color[get_color_index(win_data->invert_color, index)]);
 		// g_free(temp_str);
 	}
-	
+
 	win_data->have_custom_color = TRUE;
 	if (win_data->use_custom_theme == FALSE)
 	{
@@ -2004,7 +2211,6 @@ void update_fg_bg_color(struct Window *win_data, GdkColor color, gboolean update
 		recreate_theme_menu_items(win_data);
 	}
 }
-
 // the win_data->temp_index will updated to get_color_index()!!
 // the color_index here is the serial no of button!!
 void update_ansi_color_info(GtkWidget *button, gint color_index)
@@ -2013,29 +2219,37 @@ void update_ansi_color_info(GtkWidget *button, gint color_index)
 	g_debug("! Launch update_ansi_color_info() with button = %p, color_index = %d", button, color_index);
 #endif
 #ifdef SAFEMODE
-	if (menu_active_window==NULL) return;
+	if (real_menu_active_window==NULL) return;
 #endif
-	struct Window *win_data = (struct Window *)g_object_get_data(G_OBJECT(menu_active_window), "Win_Data");
+	struct Window *win_data = (struct Window *)g_object_get_data(G_OBJECT(real_menu_active_window), "Win_Data");
 #ifdef SAFEMODE
 	if ((win_data==NULL) || (win_data->current_vte==NULL)) return;
 #endif
-	struct Dialog *dialog_data = (struct Dialog *)g_object_get_data(G_OBJECT(menu_active_window), "Dialog");
+	struct Dialog *dialog_data = (struct Dialog *)g_object_get_data(G_OBJECT(real_menu_active_window), "Dialog");
 #ifdef SAFEMODE
 	if (dialog_data==NULL) return;
 #endif
 	gint convert_index = get_color_index(win_data->invert_color, color_index);
+
 	gchar *tmp_topic = g_strdup_printf(_("Change the ansi color [%s] in terminal"), color[convert_index].translation);
 	gtk_window_set_title(GTK_WINDOW(dialog_data->window), tmp_topic);
-	g_free(tmp_topic);
 
 	// avoid to call adjust_vte_color()
 	// g_debug("update_ansi_color_info(): set win_data->temp_index to -1");
 	win_data->temp_index = -1;
-#ifdef SAFEMODE
+#ifdef USE_OLD_GTK_COLOR_SELECTION
+#  ifdef SAFEMODE
 	if (dialog_data->operate[0]==NULL) return;
+#  endif
+	set_color_selection_colors(dialog_data->operate[0], &(dialog_data->ansi_colors_orig[convert_index]));
+#else
+#  ifdef USE_GTK_COLOR_CHOOSER
+	gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(dialog_data->color_button[color_index]), &(dialog_data->ansi_colors_orig[convert_index]));
+#  else
+	gtk_color_button_set_rgba(GTK_COLOR_BUTTON(dialog_data->color_button[color_index]), &(dialog_data->ansi_colors_orig[convert_index]));
+#  endif
 #endif
-	gtk_color_selection_set_previous_color (GTK_COLOR_SELECTION(dialog_data->operate[0]), &(dialog_data->ansi_colors_orig[convert_index]));
-	gtk_color_selection_set_current_color (GTK_COLOR_SELECTION(dialog_data->operate[0]), &(dialog_data->ansi_colors_orig[convert_index]));
+	g_free(tmp_topic);
 	// win_data->temp_index will point to the color index in color_orig
 	win_data->temp_index = convert_index;
 	// g_debug("Launch update_ansi_color_info(): win_data->temp_index = %d", win_data->temp_index);
@@ -2076,7 +2290,9 @@ GtkWidget *add_secondary_button(GtkWidget *dialog, const gchar *text, gint respo
 	if (stock_id)
 		gtk_button_set_image (GTK_BUTTON(button),
 				      gtk_image_new_from_stock(stock_id, GTK_ICON_SIZE_BUTTON));
+#ifdef HAVE_GTK_DIALOG_GET_ACTION_AREA
 	gtk_button_box_set_child_secondary (GTK_BUTTON_BOX(gtk_dialog_get_action_area(GTK_DIALOG(dialog))), button, TRUE);
+#endif
 	return button;
 }
 
@@ -2089,7 +2305,7 @@ void refresh_regex_settings(GtkWidget *widget, struct Window *win_data)
 #ifdef SAFEMODE
 	if ((win_data==NULL) || (win_data->window==NULL)) return;
 #endif
-	struct Dialog *dialog_data = (struct Dialog *)g_object_get_data(G_OBJECT(menu_active_window), "Dialog");
+	struct Dialog *dialog_data = (struct Dialog *)g_object_get_data(G_OBJECT(real_menu_active_window), "Dialog");
 #ifdef SAFEMODE
 	if (dialog_data==NULL) return;
 #endif
@@ -2179,11 +2395,19 @@ void refresh_regex(struct Window *win_data, struct Dialog *dialog_data)
 #  endif
 		if (update_bg_color)
 		{
+#  ifdef USING_OLD_GTK_RC_STYLE_NEW
 			GtkRcStyle *rc_style = gtk_rc_style_new();
 			rc_style->base[GTK_STATE_NORMAL] = win_data->find_entry_current_bg_color;
 			rc_style->color_flags[GTK_STATE_NORMAL] |= GTK_RC_BASE;
 			gtk_widget_modify_style (dialog_data->operate[0], rc_style);
 			g_object_unref(rc_style);
+#  else
+			GdkRGBA gdkrgba;
+			gchar *color_string = dirty_gdk_rgba_to_string(&(win_data->find_entry_current_bg_color));
+			gdk_rgba_parse (&gdkrgba, color_string);
+			gtk_widget_override_background_color(dialog_data->operate[0], 0, &gdkrgba);
+			g_free(color_string);
+#  endif
 		}
 #  ifdef SAFEMODE
 	}
@@ -2202,14 +2426,14 @@ void find_str(GtkWidget *widget, Dialog_Find_Type type)
 #endif
 
 #ifdef FATAL
-	// g_debug("menu_active_window = %p", menu_active_window);
-	if (menu_active_window==NULL)
+	// g_debug("real_menu_active_window = %p", real_menu_active_window);
+	if (real_menu_active_window==NULL)
 		return print_active_window_is_null_error_dialog("find_str_in_vte()");
 #endif
 #ifdef SAFEMODE
-	if (menu_active_window==NULL) return;
+	if (real_menu_active_window==NULL) return;
 #endif
-	struct Window *win_data = (struct Window *)g_object_get_data(G_OBJECT(menu_active_window), "Win_Data");
+	struct Window *win_data = (struct Window *)g_object_get_data(G_OBJECT(real_menu_active_window), "Win_Data");
 #ifdef SAFEMODE
 	if ((win_data==NULL) || (win_data->current_vte==NULL)) return;
 #endif
@@ -2218,7 +2442,7 @@ void find_str(GtkWidget *widget, Dialog_Find_Type type)
 	gboolean response = find_str_in_vte(win_data->current_vte, type);
 
 	vte_terminal_search_set_wrap_around (VTE_TERMINAL(win_data->current_vte), TRUE);
-	struct Dialog *dialog_data = (struct Dialog *)g_object_get_data(G_OBJECT(menu_active_window), "Dialog");
+	struct Dialog *dialog_data = (struct Dialog *)g_object_get_data(G_OBJECT(real_menu_active_window), "Dialog");
 	if (response)
 		gtk_widget_hide(dialog_data->operate[3]);
 	else
@@ -2288,14 +2512,14 @@ void paste_text_to_vte_terminal(GtkWidget *widget, struct Dialog *dialog_data)
 	const gchar *text = gtk_entry_get_text(GTK_ENTRY(dialog_data->operate[0]));
 	if ((text == NULL) || (text[0] == '\0')) return;
 #ifdef FATAL
-	// g_debug("menu_active_window = %p", menu_active_window);
-	if (menu_active_window==NULL)
+	// g_debug("real_menu_active_window = %p", real_menu_active_window);
+	if (real_menu_active_window==NULL)
 		return print_active_window_is_null_error_dialog("paste_text_to_vte_terminal()");
 #endif
 #ifdef SAFEMODE
-	if (menu_active_window==NULL) return;
+	if (real_menu_active_window==NULL) return;
 #endif
-	struct Window *win_data = (struct Window *)g_object_get_data(G_OBJECT(menu_active_window), "Win_Data");
+	struct Window *win_data = (struct Window *)g_object_get_data(G_OBJECT(real_menu_active_window), "Win_Data");
 #ifdef SAFEMODE
 	if (win_data==NULL) return;
 #endif
@@ -2322,177 +2546,6 @@ void paste_text_to_vte_terminal(GtkWidget *widget, struct Dialog *dialog_data)
 	gtk_window_set_focus(GTK_WINDOW(win_data->window), dialog_data->operate[0]);
 }
 
-void create_dialog(gchar *dialog_title_translation, gchar *dialog_title,  Dialog_Button_Type type,
-		   GtkWidget *window, gboolean center, gboolean resizable, gint border_width,
-		   gint response, gchar *icon, gchar *title, gboolean selectable, gint max_width_chars,
-		   gboolean state_bottom, gint create_entry_hbox, gint entry_hbox_spacing,
-		   struct Dialog *dialog_data)
-{
-#ifdef DETAIL
-	g_debug("! Launch create_dialog() with dialog_title_translation = %s, "
-		"dialog_title = %s, type = %d, window = %p, center = %d, resizable = %d, "
-		"border_width = %d, response = %d, icon = %s, title = %s, selectable = %d, "
-		"max_width_chars = %d, state_bottom = %d, create_entry_hbox = %d, dialog_data = %p",
-		dialog_title_translation, dialog_title, type, window, center, resizable,
-		border_width, response, icon, title, selectable, max_width_chars, state_bottom,
-		create_entry_hbox, dialog_data);
-#endif
-#ifdef SAFEMODE
-	if (dialog_data==NULL) return;
-#endif
-	gboolean BOTTON_ORDER = gtk_alternative_dialog_button_order(NULL);
-	// g_debug("gtk_alternative_dialog_button_order = %d" ,gtk_alternative_dialog_button_order (NULL));
-
-	// Strange behavior, If the locale is empty, or setted to 'C' or 'POSIX',
-	// And 'default_locale' is setted in the profile,
-	// All the UI will be translated to default_locale,
-	// But the window title will be empty.
-	// So, set it to un-translated string here.
-	// g_debug("init_LC_CTYPE = %s", init_LC_CTYPE);
-	if ((init_LC_CTYPE==NULL) || (init_LC_CTYPE[0]=='\0') ||
-	    (! compare_strings(init_LC_CTYPE, "C", TRUE)) ||
-	    (! compare_strings(init_LC_CTYPE, "\"C\"", TRUE)) ||
-	    (! compare_strings(init_LC_CTYPE, "POSIX", TRUE)) ||
-	    (! compare_strings(init_LC_CTYPE, "\"POSIX\"", TRUE)))
-		dialog_title_translation = dialog_title;
-
-	// g_debug("dialog_title_translation = %s", dialog_title_translation);
-	switch (type)
-	{
-		case DIALOG_OK:
-			dialog_data->window = gtk_dialog_new_with_buttons (dialog_title_translation,
-								      GTK_WINDOW(window),
-#ifdef EXIST_GTK_DIALOG_NO_SEPARATOR
-								      GTK_DIALOG_NO_SEPARATOR |
-#endif
-									GTK_DIALOG_DESTROY_WITH_PARENT,
-								      GTK_STOCK_OK,
-								      GTK_RESPONSE_OK,
-								      NULL);
-			break;
-		case DIALOG_OK_CANCEL:
-			if (BOTTON_ORDER)
-				dialog_data->window = gtk_dialog_new_with_buttons (dialog_title_translation,
-									      GTK_WINDOW(window),
-#ifdef EXIST_GTK_DIALOG_NO_SEPARATOR
-									      GTK_DIALOG_NO_SEPARATOR |
-#endif
-										GTK_DIALOG_DESTROY_WITH_PARENT,
-									      GTK_STOCK_OK,
-									      GTK_RESPONSE_OK,
-									      GTK_STOCK_CANCEL,
-									      GTK_RESPONSE_CANCEL,
-									      NULL);
-			else
-				dialog_data->window = gtk_dialog_new_with_buttons (dialog_title_translation,
-									      GTK_WINDOW(window),
-#ifdef EXIST_GTK_DIALOG_NO_SEPARATOR
-									      GTK_DIALOG_NO_SEPARATOR |
-#endif
-										GTK_DIALOG_DESTROY_WITH_PARENT,
-									      GTK_STOCK_CANCEL,
-									      GTK_RESPONSE_CANCEL,
-									      GTK_STOCK_OK,
-									      GTK_RESPONSE_OK,
-									      NULL);
-			break;
-		case DIALOG_QUIT:
-			dialog_data->window = gtk_dialog_new_with_buttons (dialog_title_translation,
-								      GTK_WINDOW(window),
-#ifdef EXIST_GTK_DIALOG_NO_SEPARATOR
-								      GTK_DIALOG_NO_SEPARATOR |
-#endif
-									GTK_DIALOG_DESTROY_WITH_PARENT,
-								      GTK_STOCK_QUIT,
-								      GTK_RESPONSE_CANCEL,
-								      NULL);
-			break;
-		case DIALOG_NONE:
-			dialog_data->window = gtk_dialog_new();
-			gtk_window_set_title(GTK_WINDOW(dialog_data->window), dialog_title_translation);
-			gtk_window_set_transient_for (GTK_WINDOW(dialog_data->window), GTK_WINDOW(window));
-#ifdef EXIST_GTK_DIALOG_NO_SEPARATOR
-			gtk_dialog_set_has_separator(GTK_DIALOG(dialog_data->window), FALSE);
-#endif
-			gtk_window_set_destroy_with_parent (GTK_WINDOW (dialog_data->window), TRUE);
-			break;
-		default:
-#ifdef FATAL
-			print_switch_out_of_range_error_dialog("create_dialog", "type", type);
-#endif
-			return;
-	}
-
-	// FIXME: It may be a bug in gtk+2?
-	// if a dialog shown before main window is shown,
-	// destroy the dialog will destroy the data of the icon, too.
-	// and when showing main window with gtk_widget_show_all(win_data->window) later,
-	// It will have no icon, and showing following error:
-	// Gtk-CRITICAL **: gtk_window_realize_icon: assertion `info->icon_pixmap == NULL' failed
-	// So, we need to set the icon for the dialog here.
-	set_window_icon(dialog_data->window);
-
-	if (center) gtk_window_set_position (GTK_WINDOW (dialog_data->window), GTK_WIN_POS_CENTER);
-	gtk_window_set_resizable (GTK_WINDOW (dialog_data->window), resizable);
-	gtk_container_set_border_width (GTK_CONTAINER (dialog_data->window), border_width);
-	gtk_dialog_set_default_response(GTK_DIALOG(dialog_data->window), response);
-
-	GtkWidget *main_hbox = gtk_hbox_new (FALSE, 5);
-	gtk_container_add (GTK_CONTAINER (gtk_dialog_get_content_area(GTK_DIALOG(dialog_data->window))), main_hbox);
-	GtkWidget *main_right_vbox = gtk_vbox_new (FALSE, 0);
-	gtk_box_pack_end (GTK_BOX(main_hbox), main_right_vbox, FALSE, FALSE, 0);
-
-
-	if (icon)
-	{
-		GtkWidget *icon_vbox = gtk_vbox_new (FALSE, 30);
-		gtk_box_pack_start (GTK_BOX(main_hbox), icon_vbox, FALSE, FALSE, 10);
-		GtkWidget *icon_image = gtk_image_new_from_stock (icon, GTK_ICON_SIZE_DIALOG);
-		gtk_box_pack_start (GTK_BOX(icon_vbox), icon_image, FALSE, FALSE, 10);
-	}
-
-	GtkWidget *state_vbox =NULL;
-	if (title)
-		state_vbox = gtk_vbox_new (FALSE, 15);
-	else
-		state_vbox = gtk_vbox_new (FALSE, 0);
-
-	gtk_box_pack_start (GTK_BOX(main_hbox), state_vbox, TRUE, TRUE, 0);
-
-	if (title)
-		dialog_data->title_label = create_label_with_text(state_vbox, TRUE, selectable, max_width_chars, title);
-
-	if (state_bottom)
-	{
-		GtkWidget *state_bottom_hbox = gtk_hbox_new (FALSE, 3);
-		gtk_box_pack_end (GTK_BOX(state_vbox), state_bottom_hbox, FALSE, FALSE, 0);
-	}
-
-	if (create_entry_hbox)
-	{
-		switch (create_entry_hbox)
-		{
-			case BOX_HORIZONTAL:
-				dialog_data->box = gtk_hbox_new (FALSE, entry_hbox_spacing);
-				break;
-			case BOX_VERTICALITY:
-				dialog_data->box = gtk_vbox_new (FALSE, entry_hbox_spacing);
-				break;
-			default:
-#ifdef FATAL
-				print_switch_out_of_range_error_dialog("create_dialog",
-								       "create_entry_hbox",
-								       create_entry_hbox);
-#endif
-				break;
-		}
-		if (title)
-			gtk_box_pack_start (GTK_BOX(state_vbox), dialog_data->box, TRUE, TRUE, 10);
-		else
-			gtk_box_pack_start (GTK_BOX(state_vbox), dialog_data->box, TRUE, TRUE, 0);
-	}
-}
-
 GtkWidget *create_entry_widget (GtkWidget *box, gchar *contents, gchar *name, gchar *default_value, gboolean activates_default)
 {
 #ifdef DETAIL
@@ -2502,20 +2555,20 @@ GtkWidget *create_entry_widget (GtkWidget *box, gchar *contents, gchar *name, gc
 #ifdef SAFEMODE
 	if (box==NULL) return NULL;
 #endif
-	GtkWidget *mainbox = gtk_vbox_new(FALSE, 10);
+	GtkWidget *mainbox = dirty_gtk_vbox_new(FALSE, 10);
 
 	if (contents && contents[0]!='\0')
 	{
-		GtkWidget *hbox = gtk_hbox_new(FALSE, 0);
-		GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
+		GtkWidget *hbox = dirty_gtk_hbox_new(FALSE, 0);
+		GtkWidget *vbox = dirty_gtk_vbox_new(FALSE, 0);
 		GtkWidget *label = gtk_label_new(contents);
 		gtk_box_pack_start(GTK_BOX(vbox), label, FALSE, FALSE, 0);
 		gtk_box_pack_start(GTK_BOX(hbox), vbox, FALSE, FALSE, 0);
 		gtk_box_pack_start(GTK_BOX(mainbox), hbox, FALSE, FALSE, 0);
 	}
 
-	GtkWidget *hbox = gtk_hbox_new(FALSE, 5);
-	GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
+	GtkWidget *hbox = dirty_gtk_hbox_new(FALSE, 5);
+	GtkWidget *vbox = dirty_gtk_vbox_new(FALSE, 0);
 	GtkWidget *label = gtk_label_new(name);
 	gtk_box_pack_start (GTK_BOX(hbox), label, FALSE, FALSE, 0);
 	GtkWidget *entry = gtk_entry_new ();
@@ -2546,8 +2599,8 @@ GtkWidget *create_frame_widget (struct Dialog *dialog_data, gchar *label,
 	if (dialog_data->box!=NULL)
 #endif
 	gtk_box_pack_start (GTK_BOX(dialog_data->box), frame, FALSE, FALSE, padding);
-	GtkWidget *vbox = gtk_vbox_new (FALSE, 15);
-	gtk_container_set_border_width (GTK_CONTAINER (vbox), 10);
+	GtkWidget *vbox = dirty_gtk_vbox_new (FALSE, 15);
+	gtk_container_set_border_width (GTK_CONTAINER (vbox), BORDER_SPACE);
 	gtk_container_add (GTK_CONTAINER (frame), vbox);
 	if (child) gtk_box_pack_start (GTK_BOX(vbox), child, FALSE, FALSE, 0);
 	return vbox;
@@ -2576,7 +2629,11 @@ GtkWidget *create_button_with_image(gchar *label_text, const gchar *stock_id, gb
 			      gtk_image_new_from_stock(stock_id, GTK_ICON_SIZE_MENU));
 	gtk_button_set_relief(GTK_BUTTON(label), GTK_RELIEF_NONE);
 	gtk_button_set_focus_on_click(GTK_BUTTON(label), FALSE);
+#ifdef USE_GTK_WIDGET_SET_HALIGN
+	gtk_widget_set_halign (label, GTK_ALIGN_START);
+#else
 	gtk_button_set_alignment(GTK_BUTTON(label), 0, 0.5);
+#endif
 #ifdef SAFEMODE
 	if (func)
 #endif
@@ -2590,7 +2647,7 @@ GtkWidget *create_hbox_with_text_and_image(gchar *text, const gchar *stock_id)
 	g_debug("! Launch create_hbox_with_text_and_image() with label_text = %s, stock_id = %s!",
 		text, stock_id);
 #endif
-	GtkWidget *hbox=gtk_hbox_new(FALSE, 0);
+	GtkWidget *hbox=dirty_gtk_hbox_new(FALSE, 0);
 	set_widget_thickness(hbox, 0);
 
 	GtkWidget *label = gtk_label_new(text);
@@ -2611,27 +2668,55 @@ void create_color_selection_widget(struct Dialog *dialog_data, GSourceFunc func,
 	if (dialog_data==NULL) return;
 #endif
 
+#ifdef USE_GTK_COLOR_CHOOSER
+	dialog_data->window = dialog_data->operate[0] = gtk_color_chooser_dialog_new(NULL, GTK_WINDOW(dialog_data->window));
+	gtk_color_chooser_set_use_alpha(GTK_COLOR_CHOOSER(dialog_data->operate[0]), FALSE);
+	// FIXME: the following codes seems no work?
+	g_object_set(dialog_data->operate[0], "show-editor", TRUE, NULL);
+	set_color_selection_colors(dialog_data->operate[0], &(dialog_data->original_color));
+
+	// FIXME: The "color-changed" signal don't work in GTK3+ anymore.
+#  ifdef SAFEMODE
+	// if (func)
+#  endif
+	//	g_signal_connect_after(dialog_data->operate[0], "color-activated",
+	//			       G_CALLBACK(func), func_data);
+#endif
+#ifdef USE_OLD_GTK_COLOR_SELECTION
 	dialog_data->operate[0] = gtk_color_selection_new();
 	// save the color data first
-	gtk_color_selection_set_has_opacity_control(GTK_COLOR_SELECTION(dialog_data->operate[0]),
+	gtk_color_selection_set_has_opacity_control(GTK_COLOR_CHOOSER(dialog_data->operate[0]),
 						    FALSE);
-	gtk_color_selection_set_has_palette(GTK_COLOR_SELECTION(dialog_data->operate[0]), FALSE);
+	gtk_color_selection_set_has_palette(GTK_COLOR_CHOOSER(dialog_data->operate[0]), FALSE);
 	dialog_data->recover = FALSE;
 
-	// set the previous/current color of gtk_color_selection dialog
-	gtk_color_selection_set_previous_color (GTK_COLOR_SELECTION(dialog_data->operate[0]),
-						&(dialog_data->original_color));
-	gtk_color_selection_set_current_color ( GTK_COLOR_SELECTION(dialog_data->operate[0]),
-						&(dialog_data->original_color));
-#ifdef SAFEMODE
+	set_color_selection_colors(dialog_data->operate[0], &(dialog_data->original_color));
+
+#  ifdef SAFEMODE
 	if (dialog_data->box!=NULL)
-#endif
+#  endif
 	gtk_box_pack_start (GTK_BOX(dialog_data->box), dialog_data->operate[0], TRUE, TRUE, 0);
-#ifdef SAFEMODE
+
+#  ifdef SAFEMODE
 	if (func)
-#endif
+#  endif
 		g_signal_connect_after(dialog_data->operate[0], "color-changed",
 				       G_CALLBACK(func), func_data);
+#endif
+}
+
+void set_color_selection_colors(GtkWidget *color_selection, GdkRGBA *color)
+{
+#ifdef SAFEMODE
+	if (color_selection==NULL) return;
+#endif
+#ifdef USE_GTK_COLOR_CHOOSER
+	gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(color_selection), color);
+#else
+	// set the previous/current color of GTK_COLOR_CHOOSER dialog
+	gtk_color_selection_set_previous_rgba(GTK_COLOR_CHOOSER(color_selection), color);
+	gtk_color_selection_set_current_rgba(GTK_COLOR_CHOOSER(color_selection), color);
+#endif
 }
 
 void create_scale_widget(struct Dialog *dialog_data, gdouble min, gdouble max, gdouble step, gdouble value,
@@ -2644,7 +2729,7 @@ void create_scale_widget(struct Dialog *dialog_data, gdouble min, gdouble max, g
 #ifdef SAFEMODE
 	if (dialog_data==NULL) return;
 #endif
-	GtkWidget *hbox1 = gtk_hbox_new (FALSE, 0);
+	GtkWidget *hbox1 = dirty_gtk_hbox_new (FALSE, 0);
 #ifdef SAFEMODE
 	if (dialog_data->box!=NULL)
 #endif
@@ -2670,7 +2755,7 @@ void create_scale_widget(struct Dialog *dialog_data, gdouble min, gdouble max, g
 	if (dialog_data->box!=NULL)
 #endif
 		gtk_box_pack_start (GTK_BOX(dialog_data->box), dialog_data->operate[0], TRUE, TRUE, 0);
-	GtkWidget *hbox2 = gtk_hbox_new (FALSE, 0);
+	GtkWidget *hbox2 = dirty_gtk_hbox_new (FALSE, 0);
 #ifdef SAFEMODE
 	if (dialog_data->box!=NULL)
 #endif
@@ -2759,7 +2844,7 @@ gboolean grab_key_press (GtkWidget *window, GdkEventKey *event, struct Dialog *d
 	key_value = deal_dialog_key_press_join_string(&key_value, " ", gdk_keyval_name(event->keyval));
 	set_markup_key_value(TRUE, "blue", key_value, dialog_data->operate[0]);
 
-	struct Window *win_data = (struct Window *)g_object_get_data(G_OBJECT(menu_active_window), "Win_Data");
+	struct Window *win_data = (struct Window *)g_object_get_data(G_OBJECT(real_menu_active_window), "Win_Data");
 #ifdef SAFEMODE
 	if (win_data==NULL) return FALSE;
 #endif
@@ -2905,16 +2990,46 @@ gchar *deal_dialog_key_press_join_string(StrAddr **key_value, gchar *separator, 
 	return join_string;
 }
 
-void adjust_vte_color(GtkColorSelection *colorselection, GtkWidget *vte)
+#if defined(USE_GTK_COLOR_CHOOSER) || defined(UNIT_TEST)
+void adjust_vte_color_sample(GtkColorButton* color_button, gint color_index)
+{
+#  ifdef DETAIL
+	g_debug("! Launch adjust_vte_color_sample() with color_button = %p, color_index = %d", color_button, color_index);
+#  endif
+#  ifdef SAFEMODE
+	if (color_button==NULL) return;
+#  endif
+	struct Window *win_data = (struct Window *)g_object_get_data(G_OBJECT(real_menu_active_window), "Win_Data");
+	win_data->temp_index = get_color_index(win_data->invert_color, color_index);
+
+	GdkRGBA color;
+	// gtk_color_button_get_rgba(GTK_COLOR_BUTTON(color_button), &color);
+	gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(color_button), &color);
+
+	adjust_vte_color(NULL, &color, win_data->current_vte);
+}
+#endif
+
+// ** README ** : GTK2+: #define adjust_vte_color(x,y,z) adjust_vte_color(x,z)
+void adjust_vte_color(GtkColorChooser *color_selection, GdkRGBA *color, GtkWidget *vte)
 {
 #ifdef DETAIL
-	g_debug("! Launch adjust_vte_color() with colorselection = %p, vte = %p", colorselection, vte);
+	g_debug("! Launch adjust_vte_color() with color_selection = %p, color = %p, vte = %p", color_selection, color, vte);
 #endif
 #ifdef SAFEMODE
 	if (vte==NULL) return;
 #endif
+	GdkRGBA final_color;
+#ifdef USE_OLD_GTK_COLOR_SELECTION
+	if (color_selection) gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(color_selection), &final_color);
+#else
+	if (color==NULL)
+		gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(color_selection), &final_color);
+	else
+		final_color=*color;
+#endif
 	// g_debug("Changing the color for vte %p", vte);
-	struct Dialog *dialog_data = (struct Dialog *)g_object_get_data(G_OBJECT(menu_active_window), "Dialog");
+	struct Dialog *dialog_data = (struct Dialog *)g_object_get_data(G_OBJECT(real_menu_active_window), "Dialog");
 	// g_debug("Get dialog_data = %p", dialog_data);
 #ifdef SAFEMODE
 	if (dialog_data==NULL) return;
@@ -2933,8 +3048,7 @@ void adjust_vte_color(GtkColorSelection *colorselection, GtkWidget *vte)
 #ifdef SAFEMODE
 			if ((page_data==NULL) || (page_data->window==NULL)) return;
 #endif
-			struct Window *win_data = (struct Window *)g_object_get_data(G_OBJECT(page_data->window),
-								     "Win_Data");
+			struct Window *win_data = (struct Window *)g_object_get_data(G_OBJECT(page_data->window), "Win_Data");
 #ifdef SAFEMODE
 			if (win_data==NULL) return;
 #endif
@@ -2944,23 +3058,26 @@ void adjust_vte_color(GtkColorSelection *colorselection, GtkWidget *vte)
 			if ((dialog_data->type==CHANGE_THE_FOREGROUND_COLOR) ||
 			    ((dialog_data->type==CHANGE_THE_ANSI_COLORS) && (converted_index==(COLOR-1))))
 			{
-				if (! dialog_data->recover)
-					gtk_color_selection_get_current_color (colorselection, &(dialog_data->original_color));
-				vte_terminal_set_color_foreground(VTE_TERMINAL(vte), &(dialog_data->original_color));
-				vte_terminal_set_color_bold (VTE_TERMINAL(vte), &(dialog_data->original_color));
+				// print_color(-1, "RECONVER 1: final_color", final_color);
+				if (dialog_data->recover)
+					final_color = dialog_data->original_color;
+
+				// print_color(-1, "RECONVER 2: final_color", final_color);
+				vte_terminal_set_color_foreground_rgba(VTE_TERMINAL(vte), &(final_color));
+				vte_terminal_set_color_bold_rgba(VTE_TERMINAL(vte), &(final_color));
 
 				if (dialog_data->type==CHANGE_THE_ANSI_COLORS)
 				{
-					dialog_data->ansi_colors[converted_index] = dialog_data->original_color;
-					dialog_data->ansi_colors_orig[win_data->temp_index] = dialog_data->original_color;
+					dialog_data->ansi_colors[converted_index] = final_color;
+					dialog_data->ansi_colors_orig[win_data->temp_index] = final_color;
 				}
 			}
 			else if ((dialog_data->type==CHANGE_THE_BACKGROUND_COLOR) ||
 			    ((dialog_data->type==CHANGE_THE_ANSI_COLORS) && (converted_index==0)))
 			{
-				if (! dialog_data->recover)
+				if (dialog_data->recover)
 				{
-					gtk_color_selection_get_current_color (colorselection, &(dialog_data->original_color));
+					final_color = dialog_data->original_color;
 					// FIXME: GtkColorSelection have no ALPHA CHANGED signal.
 					//	  so that the following code should be marked for temporary
 					//if (use_rgba)
@@ -2974,12 +3091,14 @@ void adjust_vte_color(GtkColorSelection *colorselection, GtkWidget *vte)
 				//else if (use_rgba)
 				//	set_background_saturation(NULL, 0, background_saturation, vte);
 
-				vte_terminal_set_color_background(VTE_TERMINAL(vte), &(dialog_data->original_color));
-				vte_terminal_set_background_tint_color (VTE_TERMINAL(vte), &(dialog_data->original_color));
+				vte_terminal_set_color_background_rgba(VTE_TERMINAL(vte), &(final_color));
+#if defined(ENABLE_VTE_BACKGROUND) || defined(FORCE_ENABLE_VTE_BACKGROUND)
+				dirty_vte_terminal_set_background_tint_color(VTE_TERMINAL(vte), final_color);
+#endif
 				if (dialog_data->type==CHANGE_THE_ANSI_COLORS)
 				{
-					dialog_data->ansi_colors[converted_index] = dialog_data->original_color;
-					dialog_data->ansi_colors_orig[win_data->temp_index] = dialog_data->original_color;
+					dialog_data->ansi_colors[converted_index] = final_color;
+					dialog_data->ansi_colors_orig[win_data->temp_index] = final_color;
 				}
 			}
 			else
@@ -2988,15 +3107,19 @@ void adjust_vte_color(GtkColorSelection *colorselection, GtkWidget *vte)
 				// win_data->temp_index == -1: update_ansi_color_info() is called.
 				if (win_data->temp_index > -1)
 				{
-					GdkColor tmp_color;
-					gtk_color_selection_get_current_color (colorselection, &tmp_color);
-
+					GdkRGBA tmp_color;
+#ifdef USE_OLD_GTK_COLOR_SELECTION
+					gtk_color_chooser_get_rgba(color_selection, &tmp_color);
+#else
+					tmp_color = final_color;
+#endif
 					// g_debug("adjust_vte_color(): update the %d color of colors_orig", win_data->temp_index);
 					dialog_data->ansi_colors_orig[win_data->temp_index] = tmp_color;
 					adjust_ansi_color(&dialog_data->ansi_colors[get_color_index(win_data->invert_color, win_data->temp_index)],
 							  &dialog_data->ansi_colors_orig[win_data->temp_index],
 							  win_data->color_brightness);
-					set_vte_color(win_data->current_vte, FALSE, win_data->cursor_color, dialog_data->ansi_colors, FALSE);
+					set_vte_color(win_data->current_vte, FALSE, win_data->custom_cursor_color,
+						      win_data->cursor_color, dialog_data->ansi_colors, FALSE, FALSE);
 					// set_new_ansi_color(win_data->current_vte, dialog_data->ansi_colors, dialog_data->ansi_colors_orig,
 					//		   win_data->color_brightness, win_data->invert_color, FALSE, win_data->cursor_color);
 				}
@@ -3004,10 +3127,29 @@ void adjust_vte_color(GtkColorSelection *colorselection, GtkWidget *vte)
 			break;
 		}
 		case CHANGE_THE_CURSOR_COLOR:
-			if (! dialog_data->recover)
-				gtk_color_selection_get_current_color (colorselection, &(dialog_data->original_color));
-			vte_terminal_set_color_cursor(VTE_TERMINAL(vte), &(dialog_data->original_color));
+		{
+#ifdef SAFEMODE
+			if (vte==NULL) return;
+#endif
+			struct Page *page_data = (struct Page *)g_object_get_data(G_OBJECT(vte), "Page_Data");
+#ifdef SAFEMODE
+			if ((page_data==NULL) || (page_data->window==NULL)) return;
+#endif
+			struct Window *win_data = (struct Window *)g_object_get_data(G_OBJECT(page_data->window), "Win_Data");
+#ifdef SAFEMODE
+				if (win_data==NULL) return;
+#endif
+#ifdef USE_OLD_GTK_COLOR_SELECTION
+			//   [Cancel] is pressed       [OK] is pressed
+			if ((dialog_data->recover) || (color_selection==NULL))
+				final_color = win_data->cursor_color;
+			else
+				win_data->custom_cursor_color = TRUE;
+			gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON(dialog_data->custom_cursor_color_checkbox), ! win_data->custom_cursor_color);
+#endif
+			enable_custom_cursor_color(vte, win_data->custom_cursor_color, &(final_color));
 			break;
+		}
 		case CHANGE_THE_TEXT_COLOR_OF_WINDOW_TITLE:
 		case CHANGE_THE_TEXT_COLOR_OF_CMDLINE:
 		case CHANGE_THE_TEXT_COLOR_OF_CURRENT_DIR:
@@ -3017,9 +3159,8 @@ void adjust_vte_color(GtkColorSelection *colorselection, GtkWidget *vte)
 		{
 			// the change of color will be shown(demo) in 1st page and demo page.
 			gchar *current_color = NULL;
-			gtk_color_selection_get_current_color (colorselection, &(dialog_data->original_color));
 #ifdef ENABLE_GDKCOLOR_TO_STRING
-			current_color = gdk_color_to_string(&(dialog_data->original_color));
+			current_color = dirty_gdk_rgba_to_string(&(final_color));
 #endif
 			struct Page *page_data = (struct Page *)g_object_get_data(G_OBJECT(vte), "Page_Data");
 #ifdef SAFEMODE
@@ -3060,7 +3201,7 @@ void recover_page_colors(GtkWidget *dialog_window, GtkWidget *window, GtkWidget 
 	if ((dialog_window==NULL) || (window==NULL)) return;
 #endif
 
-	struct Dialog *dialog_data = (struct Dialog *)g_object_get_data(G_OBJECT(menu_active_window), "Dialog");
+	struct Dialog *dialog_data = (struct Dialog *)g_object_get_data(G_OBJECT(real_menu_active_window), "Dialog");
 	struct Window *win_data = (struct Window *)g_object_get_data(G_OBJECT(window), "Win_Data");
 #ifdef SAFEMODE
 	if ((dialog_data==NULL) || (win_data==NULL)) return;
@@ -3082,7 +3223,7 @@ void recover_page_colors(GtkWidget *dialog_window, GtkWidget *window, GtkWidget 
 #ifdef SAFEMODE
 		if (page_data)
 #endif
-			close_page (page_data->vte, TRUE);
+			close_page (page_data->vte, CLOSE_WITH_WINDOW_CLOSE_BUTTON);
 	}
 	win_data->kill_color_demo_vte = FALSE;
 
@@ -3150,12 +3291,12 @@ void create_invalid_locale_error_message(gchar *locale)
 					   "Please close all the windows of %s and try again."),
 					   color_locale, PACKAGE);
 	error_dialog(NULL, _("Not supported locale!"), "Not supported locale!",
-		     GTK_STOCK_DIALOG_WARNING, err_msg, NULL);
+		     GTK_FAKE_STOCK_DIALOG_WARNING, err_msg, NULL);
 	g_free(color_locale);
 	g_free(err_msg);
 }
 
-// 1. menu_active_window = NULL
+// 1. real_menu_active_window = NULL
 // 2. Not supported feature
 // 3. The format of socket data is out of date
 // 4. The following settings can NOT be applied
@@ -3180,7 +3321,7 @@ void error_dialog(GtkWidget *window, gchar *title_translation, gchar *title,
 #ifdef UNIT_TEST
 	g_message("%s", utf8_message);
 #else
-	struct Dialog dialog_data;
+	struct Dialog *dialog_data = g_new0(struct Dialog, 1);
 
 	// void create_dialog(gchar *dialog_title, Dialog_Button_Type type, GtkWidget *window, gboolean center,
 	//		      gboolean resizable, gint border_width, gint response, gchar *icon,
@@ -3188,10 +3329,11 @@ void error_dialog(GtkWidget *window, gchar *title_translation, gchar *title,
 	//		      gboolean state_bottom, gint create_entry_hbox, struct Dialog *dialog_data)
 	create_dialog(title_translation, title, DIALOG_OK, window, TRUE,
 		      FALSE, 10, GTK_RESPONSE_OK, icon, utf8_message,
-		      FALSE, 0, TRUE, BOX_NONE, 0, &dialog_data);
-	gtk_widget_show_all (dialog_data.window);
-	gtk_dialog_run(GTK_DIALOG(dialog_data.window));
-	gtk_widget_destroy(dialog_data.window);
+		      FALSE, 0, TRUE, BOX_NONE, 0, dialog_data);
+	gtk_widget_show_all (dialog_data->window);
+	gtk_dialog_run(GTK_DIALOG(dialog_data->window));
+	gtk_widget_destroy(dialog_data->window);
+	g_free(dialog_data);
 #endif
 	g_free(utf8_message);
 	dialog_activated--;
@@ -3209,7 +3351,7 @@ void print_switch_out_of_range_error_dialog(gchar *function, gchar *var, gint va
 #endif
 		error_dialog(NULL, _("The following error occurred:"),
 			     "The following error occurred:",
-			     GTK_STOCK_DIALOG_ERROR, err_msg, NULL);
+			     GTK_FAKE_STOCK_DIALOG_ERROR, err_msg, NULL);
 	g_free(err_msg);
 }
 #endif
@@ -3221,7 +3363,7 @@ gboolean upgrade_dialog(gchar *version_str)
 #endif
 	gchar *err_msg = g_strdup_printf(_("You should upgrade to %s and recompile %s to support this feature."), version_str, PACKAGE);
 	error_dialog(NULL, _("Not supported feature!"), "Not supported feature!",
-		     GTK_STOCK_DIALOG_WARNING, err_msg, NULL);
+		     GTK_FAKE_STOCK_DIALOG_WARNING, err_msg, NULL);
 	g_free(err_msg);
 	return FALSE;
 }
@@ -3251,7 +3393,7 @@ gboolean set_ansi_color(GtkRange *range, GtkScrollType scroll, gdouble value, Gt
 	// g_debug("set_ansi_color(): win_data->color_brightness = %0.3f, win_data->color_brightness_inactive = %0.3f",
 	//	win_data->color_brightness, win_data->color_brightness_inactive);
 
-	struct Dialog *dialog_data = (struct Dialog *)g_object_get_data(G_OBJECT(menu_active_window), "Dialog");
+	struct Dialog *dialog_data = (struct Dialog *)g_object_get_data(G_OBJECT(real_menu_active_window), "Dialog");
 #ifdef SAFEMODE
 	if (dialog_data==NULL) return FALSE;
 #endif
@@ -3260,19 +3402,19 @@ gboolean set_ansi_color(GtkRange *range, GtkScrollType scroll, gdouble value, Gt
 	//					win_data->color_brightness,
 	//					dialog_data->original_color_brightness);
 	gboolean dim_fg_color = (dialog_data->type==ADJUST_THE_BRIGHTNESS_OF_ANSI_COLORS_WHEN_INACTIVE) ? TRUE : FALSE;
-	set_new_ansi_color(win_data->current_vte, dialog_data->ansi_colors, dialog_data->ansi_colors_orig, 
-			   win_data->color_brightness, win_data->invert_color, FALSE, win_data->cursor_color, dim_fg_color);
+	set_new_ansi_color(win_data->current_vte, dialog_data->ansi_colors, dialog_data->ansi_colors_orig, win_data->color_brightness,
+			   win_data->invert_color, FALSE, win_data->custom_cursor_color, win_data->cursor_color, dim_fg_color);
 	return FALSE;
 }
 
 
-GdkColor get_inactive_color(GdkColor original_fg_color, gdouble new_brightness, gdouble old_brightness)
+GdkRGBA get_inactive_color(GdkRGBA original_fg_color, gdouble new_brightness, gdouble old_brightness)
 {
 #ifdef DETAIL
 	g_debug("! Launch get_inactive_color() with new_brightness = %3f, "
 		"old_brightness = %3f!", new_brightness, old_brightness);
 #endif
-	GdkColor inactive_color;
+	GdkRGBA inactive_color;
 	if (new_brightness < old_brightness)
 		adjust_ansi_color(&inactive_color,
 					    &(original_fg_color),
@@ -3286,8 +3428,8 @@ GdkColor get_inactive_color(GdkColor original_fg_color, gdouble new_brightness, 
 	return inactive_color;
 }
 
-void set_new_ansi_color(GtkWidget *vte, GdkColor color[COLOR], GdkColor color_orig[COLOR], gdouble color_brightness,
-			gboolean invert_color, gboolean default_vte_color, GdkColor cursor_color, gboolean dim_fg_color)
+void set_new_ansi_color(GtkWidget *vte, GdkRGBA color[COLOR], GdkRGBA color_orig[COLOR], gdouble color_brightness, gboolean invert_color,
+			gboolean default_vte_color, gboolean custom_cursor_color, GdkRGBA cursor_color, gboolean dim_fg_color)
 {
 #ifdef DETAIL
 	g_debug("! Launch set_new_ansi_color() with vte = %p, color_brightness = %3f, invert_color = %d, default_vte_color = %d",
@@ -3297,7 +3439,7 @@ void set_new_ansi_color(GtkWidget *vte, GdkColor color[COLOR], GdkColor color_or
 	if ((vte==NULL) || (color_orig==NULL) || (color==NULL)) return;
 #endif
 	create_theme_color_data(color, color_orig, color_brightness, invert_color, default_vte_color, dim_fg_color);
-	set_vte_color(vte, default_vte_color, cursor_color, color, FALSE);
+	set_vte_color(vte, default_vte_color, custom_cursor_color, cursor_color, color, FALSE, FALSE);
 }
 
 void hide_combo_box_capital(GtkCellLayout *cell_layout, GtkCellRenderer *cell,
@@ -3509,11 +3651,11 @@ GtkWidget *add_text_to_notebook(GtkWidget *notebook, const gchar *label, const g
 #endif
 		set_widget_can_not_get_focus(text_label);
 
-	GtkWidget *hbox = gtk_hbox_new(FALSE, 0);
+	GtkWidget *hbox = dirty_gtk_hbox_new(FALSE, 0);
 	gtk_container_set_border_width(GTK_CONTAINER(hbox), 10);
 	gtk_box_pack_start(GTK_BOX(hbox), text_label, TRUE, TRUE, 0);
 
-	GtkWidget *label_hbox = gtk_hbox_new(FALSE, 0);
+	GtkWidget *label_hbox = dirty_gtk_hbox_new(FALSE, 0);
 	set_widget_thickness(label_hbox, 0);
 	GtkWidget *image = gtk_image_new_from_stock(stock_id, GTK_ICON_SIZE_MENU);
 	gtk_box_pack_start(GTK_BOX(label_hbox), image, FALSE, FALSE, 0);
@@ -3567,3 +3709,189 @@ void show_usage_text(GtkWidget *notebook, gpointer page, guint page_num, struct 
 //#endif
 //	g_free(err_msg);
 //}
+
+void create_dialog(gchar *dialog_title_translation, gchar *dialog_title,  Dialog_Button_Type type,
+		   GtkWidget *window, gboolean center, gboolean resizable, gint border_width,
+		   gint response, gchar *icon, gchar *title, gboolean selectable, gint max_width_chars,
+		   gboolean state_bottom, gint create_entry_hbox, gint entry_hbox_spacing,
+		   struct Dialog *dialog_data)
+{
+#ifdef DETAIL
+	g_debug("! Launch create_dialog() with dialog_title_translation = %s, "
+		"dialog_title = %s, type = %d, window = %p, center = %d, resizable = %d, "
+		"border_width = %d, response = %d, icon = %s, title = %s, selectable = %d, "
+		"max_width_chars = %d, state_bottom = %d, create_entry_hbox = %d, dialog_data = %p",
+		dialog_title_translation, dialog_title, type, window, center, resizable,
+		border_width, response, icon, title, selectable, max_width_chars, state_bottom,
+		create_entry_hbox, dialog_data);
+#endif
+#ifdef SAFEMODE
+	if (dialog_data==NULL) return;
+#endif
+#ifdef USE_GTK_COLOR_CHOOSER
+	switch (dialog_data->type)
+	{
+		case CHANGE_THE_FOREGROUND_COLOR:
+		case CHANGE_THE_BACKGROUND_COLOR:
+		case CHANGE_THE_CURSOR_COLOR:
+		case CHANGE_THE_TEXT_COLOR_OF_WINDOW_TITLE:
+		case CHANGE_THE_TEXT_COLOR_OF_CMDLINE:
+		case CHANGE_THE_TEXT_COLOR_OF_CURRENT_DIR:
+		case CHANGE_THE_TEXT_COLOR_OF_CUSTOM_PAGE_NAME:
+		case CHANGE_THE_TEXT_COLOR_OF_ROOT_PRIVILEGES_CMDLINE:
+		case CHANGE_THE_TEXT_COLOR_OF_NORMAL_TEXT:
+			return;
+	}
+#endif
+	gboolean BOTTON_ORDER = gtk_alternative_dialog_button_order(NULL);
+	// g_debug("gtk_alternative_dialog_button_order = %d" ,gtk_alternative_dialog_button_order (NULL));
+
+	// Strange behavior, If the locale is empty, or setted to 'C' or 'POSIX',
+	// And 'default_locale' is setted in the profile,
+	// All the UI will be translated to default_locale,
+	// But the window title will be empty.
+	// So, set it to un-translated string here.
+	// g_debug("init_LC_CTYPE = %s", init_LC_CTYPE);
+	if ((init_LC_CTYPE==NULL) || (init_LC_CTYPE[0]=='\0') ||
+	    (! compare_strings(init_LC_CTYPE, "C", TRUE)) ||
+	    (! compare_strings(init_LC_CTYPE, "\"C\"", TRUE)) ||
+	    (! compare_strings(init_LC_CTYPE, "POSIX", TRUE)) ||
+	    (! compare_strings(init_LC_CTYPE, "\"POSIX\"", TRUE)))
+		dialog_title_translation = dialog_title;
+
+	// g_debug("dialog_title_translation = %s", dialog_title_translation);
+	switch (type)
+	{
+		case DIALOG_OK:
+			dialog_data->window = gtk_dialog_new_with_buttons (dialog_title_translation,
+								      GTK_WINDOW(window),
+#ifdef EXIST_GTK_DIALOG_NO_SEPARATOR
+								      GTK_DIALOG_NO_SEPARATOR |
+#endif
+									GTK_DIALOG_DESTROY_WITH_PARENT,
+								      GTK_FAKE_STOCK_OK,
+								      GTK_RESPONSE_OK,
+								      NULL);
+			break;
+		case DIALOG_OK_CANCEL:
+			if (BOTTON_ORDER)
+				dialog_data->window = gtk_dialog_new_with_buttons (dialog_title_translation,
+									      GTK_WINDOW(window),
+#ifdef EXIST_GTK_DIALOG_NO_SEPARATOR
+									      GTK_DIALOG_NO_SEPARATOR |
+#endif
+										GTK_DIALOG_DESTROY_WITH_PARENT,
+									      GTK_FAKE_STOCK_OK,
+									      GTK_RESPONSE_OK,
+									      GTK_FAKE_STOCK_CANCEL,
+									      GTK_RESPONSE_CANCEL,
+									      NULL);
+			else
+				dialog_data->window = gtk_dialog_new_with_buttons (dialog_title_translation,
+									      GTK_WINDOW(window),
+#ifdef EXIST_GTK_DIALOG_NO_SEPARATOR
+									      GTK_DIALOG_NO_SEPARATOR |
+#endif
+										GTK_DIALOG_DESTROY_WITH_PARENT,
+									      GTK_FAKE_STOCK_CANCEL,
+									      GTK_RESPONSE_CANCEL,
+									      GTK_FAKE_STOCK_OK,
+									      GTK_RESPONSE_OK,
+									      NULL);
+			break;
+		case DIALOG_QUIT:
+			dialog_data->window = gtk_dialog_new_with_buttons (dialog_title_translation,
+								      GTK_WINDOW(window),
+#ifdef EXIST_GTK_DIALOG_NO_SEPARATOR
+								      GTK_DIALOG_NO_SEPARATOR |
+#endif
+									GTK_DIALOG_DESTROY_WITH_PARENT,
+								      GTK_FAKE_STOCK_QUIT,
+								      GTK_RESPONSE_CANCEL,
+								      NULL);
+			break;
+		case DIALOG_NONE:
+			dialog_data->window = gtk_dialog_new();
+			gtk_window_set_title(GTK_WINDOW(dialog_data->window), dialog_title_translation);
+			gtk_window_set_transient_for (GTK_WINDOW(dialog_data->window), GTK_WINDOW(window));
+#ifdef EXIST_GTK_DIALOG_NO_SEPARATOR
+			gtk_dialog_set_has_separator(GTK_DIALOG(dialog_data->window), FALSE);
+#endif
+			gtk_window_set_destroy_with_parent (GTK_WINDOW (dialog_data->window), TRUE);
+			break;
+		default:
+#ifdef FATAL
+			print_switch_out_of_range_error_dialog("create_dialog", "type", type);
+#endif
+			return;
+	}
+
+	// FIXME: It may be a bug in gtk+2?
+	// if a dialog shown before main window is shown,
+	// destroy the dialog will destroy the data of the icon, too.
+	// and when showing main window with gtk_widget_show_all(win_data->window) later,
+	// It will have no icon, and showing following error:
+	// Gtk-CRITICAL **: gtk_window_realize_icon: assertion `info->icon_pixmap == NULL' failed
+	// So, we need to set the icon for the dialog here.
+	set_window_icon(dialog_data->window);
+
+	if (center) gtk_window_set_position (GTK_WINDOW (dialog_data->window), GTK_WIN_POS_CENTER);
+	gtk_window_set_resizable (GTK_WINDOW (dialog_data->window), resizable);
+	gtk_container_set_border_width (GTK_CONTAINER (dialog_data->window), border_width);
+	gtk_dialog_set_default_response(GTK_DIALOG(dialog_data->window), response);
+
+	GtkWidget *main_hbox = dirty_gtk_hbox_new (FALSE, 5);
+	gtk_container_add (GTK_CONTAINER (gtk_dialog_get_content_area(GTK_DIALOG(dialog_data->window))), main_hbox);
+	GtkWidget *main_right_vbox = dirty_gtk_vbox_new (FALSE, 0);
+	gtk_box_pack_end (GTK_BOX(main_hbox), main_right_vbox, FALSE, FALSE, 0);
+
+
+	if (icon)
+	{
+		GtkWidget *icon_vbox = dirty_gtk_vbox_new (FALSE, 30);
+		gtk_box_pack_start (GTK_BOX(main_hbox), icon_vbox, FALSE, FALSE, 10);
+		GtkWidget *icon_image = gtk_image_new_from_stock (icon, GTK_ICON_SIZE_DIALOG);
+		gtk_box_pack_start (GTK_BOX(icon_vbox), icon_image, FALSE, FALSE, 10);
+	}
+
+	GtkWidget *state_vbox =NULL;
+	if (title)
+		state_vbox = dirty_gtk_vbox_new (FALSE, 15);
+	else
+		state_vbox = dirty_gtk_vbox_new (FALSE, 0);
+
+	gtk_box_pack_start (GTK_BOX(main_hbox), state_vbox, TRUE, TRUE, 0);
+
+	if (title)
+		dialog_data->title_label = create_label_with_text(state_vbox, TRUE, selectable, max_width_chars, title);
+
+	if (state_bottom)
+	{
+		GtkWidget *state_bottom_hbox = dirty_gtk_hbox_new (FALSE, 3);
+		gtk_box_pack_end (GTK_BOX(state_vbox), state_bottom_hbox, FALSE, FALSE, 0);
+	}
+
+	if (create_entry_hbox)
+	{
+		switch (create_entry_hbox)
+		{
+			case BOX_HORIZONTAL:
+				dialog_data->box = dirty_gtk_hbox_new (FALSE, entry_hbox_spacing);
+				break;
+			case BOX_VERTICALITY:
+				dialog_data->box = dirty_gtk_vbox_new (FALSE, entry_hbox_spacing);
+				break;
+			default:
+#ifdef FATAL
+				print_switch_out_of_range_error_dialog("create_dialog",
+								       "create_entry_hbox",
+								       create_entry_hbox);
+#endif
+				break;
+		}
+		if (title)
+			gtk_box_pack_start (GTK_BOX(state_vbox), dialog_data->box, TRUE, TRUE, 10);
+		else
+			gtk_box_pack_start (GTK_BOX(state_vbox), dialog_data->box, TRUE, TRUE, 0);
+	}
+}

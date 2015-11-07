@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2010 Lu, Chao-Ming (Tetralet).  All rights reserved.
+ * Copyright (c) 2008-2014 Lu, Chao-Ming (Tetralet).  All rights reserved.
  *
  * This file is part of LilyTerm.
  *
@@ -31,13 +31,20 @@ extern gchar *profile_dir;
 struct ModKey modkeys[MOD] = {{0}};
 struct KeyValue system_keys[KEYS] = {{0}};
 gchar *key_groups[KEY_GROUP] = {0};
+gchar *regex_name[REGEX] = {0};
+gchar *regex_str[REGEX] = {0};
 struct Command command[COMMAND] = {{0}};
 struct Color color[COLOR] = {{0}};
 struct Page_Color page_color[PAGE_COLOR] = {{0}};
 gchar *restricted_locale_message = NULL;
 
-struct Color_Theme system_color_theme[THEME] =
-	{{0, "",
+#ifdef USE_GDK_RGBA
+struct GdkRGBA_Theme system_color_theme[THEME] = {{0}};
+struct GdkColor_Theme temp_system_color_theme[THEME] =
+#else
+struct GdkColor_Theme system_color_theme[THEME] =
+#endif
+	{{0, "libvte",
 	  {{ 0, 0x0000, 0x0000, 0x0000 },
 	   { 0, 0xc0c0, 0x0000, 0x0000 },
 	   { 0, 0x0000, 0xc0c0, 0x0000 },
@@ -122,12 +129,46 @@ struct Color_Theme system_color_theme[THEME] =
 	   { 0, 0xffff, 0x0000, 0xffff },
 	   { 0, 0x0000, 0xffff, 0xffff },
 	   { 0, 0xffff, 0xffff, 0xffff }}},
-	 {5, "solarized",
-	  {{ 0, 0x1d1d, 0x1c1c, 0x1a1a },
+	 {5, "solarized",			// Source: http://ethanschoonover.com/solarized#the-values
+	  {{ 0, 0x0707, 0x3636, 0x4242 },	// base02;  black
+	   { 0, 0xdcdc, 0x3232, 0x2f2f },	// red;     red
+	   { 0, 0x8585, 0x9999, 0x0000 },	// green;   green
+	   { 0, 0xb5b5, 0x8989, 0x0000 },	// yellow;  yellow
+	   { 0, 0x2626, 0x8b8b, 0xd2d2 },	// blue;    blue
+	   { 0, 0xd3d3, 0x3636, 0x8282 },	// magenta; magenta
+	   { 0, 0x2a2a, 0xa1a1, 0x9898 },	// cyan;    cyan
+	   { 0, 0xeeee, 0xe8e8, 0xd5d5 },	// base2;   white
+	   { 0, 0x0000, 0x2b2b, 0x3636 },	// base03;  brblack
+	   { 0, 0xcbcb, 0x4b4b, 0x1616 },	// orange;  brred
+	   { 0, 0x5858, 0x6e6e, 0x7575 },	// base01;  brgreen
+	   { 0, 0x6565, 0x7b7b, 0x8383 },	// base00;  bryellow
+	   { 0, 0x8383, 0x9494, 0x9696 },	// base0;   brblue
+	   { 0, 0x6c6c, 0x7171, 0xc4c4 },	// violet;  brmagenta
+	   { 0, 0x9393, 0xa1a1, 0xa1a1 },	// base1;   brcyan
+	   { 0, 0xfdfd, 0xf6f6, 0xe3e3 }}},	// base3; brwhite
+	 {6, "bbs",
+	  {{ 0, 0x0000, 0x0000, 0x0000 },
+	   { 0, 0xcf01, 0x0000, 0x0000 },
+	   { 0, 0x0000, 0x5294, 0x0000 },
+	   { 0, 0x5e75, 0x5e75, 0x0000 },
+	   { 0, 0x0000, 0x0000, 0x9d59 },
+	   { 0, 0x5ef7, 0x0000, 0x5ef7 },
+	   { 0, 0x0000, 0xa0a6, 0xa0a6 },
+	   { 0, 0xc51e, 0xc51e, 0xc51e },
+	   { 0, 0x70a3, 0x70a3, 0x70a3 },
+	   { 0, 0xffff, 0x41ee, 0x41ee },
+	   { 0, 0x0000, 0xe949, 0x0000 },
+	   { 0, 0xffff, 0xffff, 0x5084 },
+	   { 0, 0x94a5, 0x94a5, 0xffff },
+	   { 0, 0xffff, 0x741d, 0xffff },
+	   { 0, 0x2d2d, 0xffff, 0xffff },
+	   { 0, 0xffff, 0xffff, 0xffff }}},
+	 {7, BINARY,
+	  {{ 0, 0x0808, 0x0808, 0x0808 },
 	   { 0, 0xb0b0, 0x2828, 0x2525 },
-	   { 0, 0x4f4f, 0x7a7a, 0x0000 },
+	   { 0, 0x5c5c, 0x8080, 0x1a1a },
 	   { 0, 0xa8a8, 0x6d6d, 0x0000 },
-	   { 0, 0x1e1e, 0x6f6f, 0xa8a8 },
+	   { 0, 0x1010, 0x3b3b, 0x5959 },
 	   { 0, 0xa8a8, 0x2b2b, 0x6868 },
 	   { 0, 0x2121, 0x8080, 0x7979 },
 	   { 0, 0xbebe, 0xb9b9, 0xaaaa },
@@ -138,8 +179,8 @@ struct Color_Theme system_color_theme[THEME] =
 	   { 0, 0x2727, 0x9090, 0xdbdb },
 	   { 0, 0xdbdb, 0x3838, 0x8686 },
 	   { 0, 0x2e2e, 0xb3b3, 0xa8a8 },
-	   { 0, 0xf1f1, 0xeaea, 0xd7d7 }}},
-	 {6, "grayscale",
+	   { 0, 0xf1f1, 0xecec, 0xe0e0 }}},
+	 {8, "grayscale",
 	  {{ 0, 0x0000, 0x0000, 0x0000 },
 	   { 0, 0x3f3f, 0x3f3f, 0x3f3f },
 	   { 0, 0x4444, 0x4444, 0x4444 },
@@ -155,7 +196,24 @@ struct Color_Theme system_color_theme[THEME] =
 	   { 0, 0x5050, 0x5050, 0x5050 },
 	   { 0, 0xaaaa, 0xaaaa, 0xaaaa },
 	   { 0, 0xa5a5, 0xa5a5, 0xa5a5 },
-	   { 0, 0xffff, 0xffff, 0xffff }}}};
+	   { 0, 0xffff, 0xffff, 0xffff }}},
+	{9, "(build-in)",
+	  {{ 0, 0x0000, 0x0000, 0x0000 },
+	   { 0, 0x0000, 0x0000, 0x0000 },
+	   { 0, 0x0000, 0x0000, 0x0000 },
+	   { 0, 0x0000, 0x0000, 0x0000 },
+	   { 0, 0x0000, 0x0000, 0x0000 },
+	   { 0, 0x0000, 0x0000, 0x0000 },
+	   { 0, 0x0000, 0x0000, 0x0000 },
+	   { 0, 0x0000, 0x0000, 0x0000 },
+	   { 0, 0x0000, 0x0000, 0x0000 },
+	   { 0, 0x0000, 0x0000, 0x0000 },
+	   { 0, 0x0000, 0x0000, 0x0000 },
+	   { 0, 0x0000, 0x0000, 0x0000 },
+	   { 0, 0x0000, 0x0000, 0x0000 },
+	   { 0, 0x0000, 0x0000, 0x0000 },
+	   { 0, 0x0000, 0x0000, 0x0000 },
+	   { 0, 0x0000, 0x0000, 0x0000 }}}};
 
 #ifdef ENABLE_VTE_ERASE_TTY
 struct Erase_Binding erase_binding[ERASE_BINDING] =
@@ -191,19 +249,44 @@ struct Cursor_Shape cursor_shape[CURSOR_SHAPE] =
 	 VTE_CURSOR_SHAPE_UNDERLINE}};
 #endif
 
+void convert_system_color_to_rgba()
+{
+#ifdef USE_GDK_RGBA
+	gint i, j;
+	for (i=0; i<THEME; i++)
+	{
+		system_color_theme[i].index = temp_system_color_theme[i].index;
+		system_color_theme[i].name = temp_system_color_theme[i].name;
+		for (j=0; j<COLOR; j++)
+			system_color_theme[i].color[j] = convert_color_to_rgba(temp_system_color_theme[i].color[j]);
+	}
+#endif
+}
+
 void init_command()
 {
 #ifdef DETAIL
 	g_debug("! Launch init_command()!");
 #endif
 
+	regex_name[0] = "username_regex";
+	regex_name[1] = "password_regex";
+	regex_name[2] = "hostname_regex";
+	regex_name[3] = "address_body_regex";
+	regex_name[4] = "address_end_regex";
+
 	#define USERNAME "[A-Za-z][-A-Za-z0-9.]*"
+	regex_str[0] = USERNAME;
 	#define PASSWORD "(:[^ \t\r\n]+)?"
+	regex_str[1] = PASSWORD;
 	#define LOGIN "(" USERNAME PASSWORD "@)?"
 	#define HOSTNAME "[A-Za-z0-9][-A-Za-z0-9.]*\\.[A-Za-z0-9]+[-A-Za-z0-9.]*[-A-Za-z0-9]*"
-	#define PORT "[:]*[0-9]*"
+	regex_str[2] = HOSTNAME;
+	#define PORT "(:[0-9]+)?"
 	#define ADDRESS_BODY "([^|.< \t\r\n\\\"]*([.][^|< \t\r\n\\\"])?[^|.< \t\r\n\\\"]*)*"
+	regex_str[3] = ADDRESS_BODY;
 	#define ADDRESS_END "[^<> \t\r\n,;|\\\"]*[^|.<> \t\r\n\\\"]"
+	regex_str[4] = ADDRESS_END;
 
 	// WWW
 	command[TAG_WWW].name = "web_browser";
@@ -214,6 +297,7 @@ void init_command()
 	command[TAG_WWW].VTE_CJK_WIDTH_name = "web_VTE_CJK_WIDTH";
 	command[TAG_WWW].encoding_name = "web_encoding";
 	command[TAG_WWW].locale_name = "web_locale";
+	command[TAG_WWW].match_regex_name = "web_match_regex";
 
 	// FTP
 	command[TAG_FTP].name = "ftp_client";
@@ -224,6 +308,7 @@ void init_command()
 	command[TAG_FTP].VTE_CJK_WIDTH_name = "ftp_VTE_CJK_WIDTH";
 	command[TAG_FTP].encoding_name = "ftp_encoding";
 	command[TAG_FTP].locale_name = "ftp_locale";
+	command[TAG_FTP].match_regex_name = "ftp_match_regex";
 
 	// FILE
 	command[TAG_FILE].name = "file_manager";
@@ -234,6 +319,7 @@ void init_command()
 	command[TAG_FILE].VTE_CJK_WIDTH_name = "file_VTE_CJK_WIDTH";
 	command[TAG_FILE].encoding_name = "file_encoding";
 	command[TAG_FILE].locale_name = "file_locale";
+	command[TAG_FILE].match_regex_name = "file_match_regex";
 
 	// MAIL
 	command[TAG_MAIL].name = "email_client";
@@ -244,6 +330,7 @@ void init_command()
 	command[TAG_MAIL].VTE_CJK_WIDTH_name = "email_VTE_CJK_WIDTH";
 	command[TAG_MAIL].encoding_name = "email_encoding";
 	command[TAG_MAIL].locale_name = "email_locale";
+	command[TAG_MAIL].match_regex_name = "email_match_regex";
 }
 
 void init_user_command(struct Window *win_data)
@@ -255,18 +342,25 @@ void init_user_command(struct Window *win_data)
 		if (win_data==NULL) return;
 #endif
 
-	win_data->user_command[TAG_WWW].command = g_strdup("firefox");
-	win_data->user_command[TAG_FTP].command = g_strdup("firefox");
-	win_data->user_command[TAG_FILE].command = g_strdup("firefox");
-	win_data->user_command[TAG_MAIL].command = g_strdup("thunderbird");
+	win_data->user_command[TAG_WWW].command = g_strdup("xdg-open");
+	win_data->user_command[TAG_FTP].command = g_strdup("xdg-open");
+	win_data->user_command[TAG_FILE].command = g_strdup("xdg-open");
+	win_data->user_command[TAG_MAIL].command = g_strdup("xdg-open");
 
 	gint i;
+
+	// Keep it in NULL will be a better idea
+	// for (i=0; i<REGEX; i++)
+	//	win_data->user_regex[i] = g_strdup("");
+
 	for (i=0; i<COMMAND; i++)
 	{
 		win_data->user_command[i].method = 1;
 		win_data->user_command[i].environ = g_strdup("");
 		win_data->user_command[i].VTE_CJK_WIDTH = 0;
 		win_data->user_command[i].locale = g_strdup("");
+		// Keep it in NULL will be a better idea
+		// win_data->user_command[i].match_regex_orig = g_strdup("");
 	}
 }
 
@@ -291,7 +385,10 @@ void init_window_parameters(struct Window *win_data)
 	win_data->locales_list = g_strdup("UTF-8");
 	// win_data->supported_locales;
 	// win_data->locale_sub_menu
+	// win_data->default_shell;
+#ifdef ENABLE_SET_EMULATION
 	win_data->emulate_term = g_strdup("xterm");
+#endif
 	win_data->VTE_CJK_WIDTH = 1;
 	// win_data->VTE_CJK_WIDTH_STR;
 	// win_data->argc;
@@ -301,6 +398,7 @@ void init_window_parameters(struct Window *win_data)
 	// win_data->init_tab_number;
 	// win_data->init_dir;
 	// win_data->login_shell;
+	// win_data->utmp;
 	// win_data->geometry;
 	// win_data->subitem_new_window_from_list;
 	// win_data->menuitem_new_window_from_list;
@@ -317,7 +415,7 @@ void init_window_parameters(struct Window *win_data)
 	// win_data->true_fullscreen;
 	win_data->show_tabs_bar = AUTOMATIC;
 	// win_data->fullscreen_show_scroll_bar = 1;
-	// win_data->unfullscreen;
+	// win_data->window_status;
 	// win_data->window;
 	// win_data->notebook;
 	win_data->show_close_button_on_tab = TRUE;
@@ -341,12 +439,17 @@ void init_window_parameters(struct Window *win_data)
 	win_data->transparent_window = 2;
 	win_data->window_opacity = 0.05;
 
-	win_data->dim_window = TRUE;
+	win_data->dim_window = FALSE;
 	win_data->window_opacity_inactive = 0.2;
 #endif
 	win_data->enable_key_binding = TRUE;
 	// win_data->User_KeyValue user_keys[KEYS];
-	// win_data->update_hints;
+	// win_data->hints_type;
+	// win_data->resize_type;
+#ifdef USE_GTK3_GEOMETRY_METHOD
+	win_data->geometry_width = SYSTEM_COLUMN;
+	win_data->geometry_height = SYSTEM_ROW;
+#endif
 	win_data->lost_focus = FALSE;
 	// win_data->keep_vte_size;
 	// win_data->menu;
@@ -360,7 +463,9 @@ void init_window_parameters(struct Window *win_data)
 	win_data->font_resize_ratio = 0;
 	win_data->window_resize_ratio = 1.12;
 	win_data->show_background_menu = TRUE;
+#ifdef ENABLE_IM_APPEND_MENUITEMS
 	// win_data->show_input_method_menu = FALSE;
+#endif
 	win_data->show_change_page_name_menu = TRUE;
 	win_data->show_exit_menu = TRUE;
 	win_data->enable_hyperlink = TRUE;
@@ -368,8 +473,13 @@ void init_window_parameters(struct Window *win_data)
 	// win_data->menuitem_copy_url;
 	// win_data->menuitem_dim_text;
 	// win_data->menuitem_cursor_blinks;
+	// win_data->menuitem_allow_bold_text;
+	// win_data->menuitem_open_url_with_ctrl_pressed;
+	// win_data->menuitem_disable_url_when_ctrl_pressed;
 	// win_data->menuitem_audible_bell;
+#ifdef ENABLE_VISIBLE_BELL
 	// win_data->menuitem_visible_bell;
+#endif
 	// win_data->menuitem_urgent_bell;
 	// win_data->urgent_bell_focus_in_event_id;
 	// win_data->menuitem_show_tabs_bar;
@@ -383,7 +493,11 @@ void init_window_parameters(struct Window *win_data)
 	// win_data->menuitem_primary;
 	// win_data->fg_color;
 	// win_data->fg_color_inactive;
+#ifdef ENABLE_GDKCOLOR_TO_STRING
 	// win_data->cursor_color;
+	dirty_gdk_color_parse (DEFAULT_CURSOR_COLOR, &(win_data->cursor_color));
+	// win_data->custom_cursor_color = FALSE;
+#endif
 	// win_data->bg_color;
 	// win_data->color_theme_str;
 	// win_data->color_theme;
@@ -435,15 +549,19 @@ void init_window_parameters(struct Window *win_data)
 	// win_data->restore_font_name;
 	win_data->default_column = SYSTEM_COLUMN;
 	win_data->default_row = SYSTEM_ROW;
+#ifdef ENABLE_SET_WORD_CHARS
 	win_data->word_chars = g_strdup("-A-Za-z0-9_.+!@&=/~%");
+#endif
 	win_data->show_scroll_bar = AUTOMATIC;
 	// 0: left
 	// 1: right
 	win_data->scroll_bar_position = 1;
+#if defined(ENABLE_VTE_BACKGROUND) || defined(FORCE_ENABLE_VTE_BACKGROUND)
 	win_data->transparent_background = 2;
 	win_data->background_saturation = 0.15;
 	// win_data->scroll_background = 0;
 	win_data->background_image = g_strdup(NULL_DEVICE);
+#endif
 	win_data->scrollback_lines = SCROLL_HISTORY;
 	win_data->dim_text = TRUE;
 #ifdef USE_NEW_VTE_CURSOR_BLINKS_MODE
@@ -451,9 +569,16 @@ void init_window_parameters(struct Window *win_data)
 #else
 	win_data->cursor_blinks = TRUE;
 #endif
+	win_data->allow_bold_text = TRUE;
+	win_data->open_url_with_ctrl_pressed = FALSE;
+	win_data->disable_url_when_ctrl_pressed = TRUE;
 	win_data->audible_bell = TRUE;
+#ifdef ENABLE_VISIBLE_BELL
 	// win_data->visible_bell = FALSE;
+#endif
+#ifdef ENABLE_BEEP_SINGAL
 	win_data->urgent_bell = TRUE;
+#endif
 	// win_data->urgent_bell_status = FALSE;
 	// win_data->urgent_bell_focus_in_event_id = 0;
 	win_data->erase_binding = erase_binding[DEFAULT_ERASE_BINDING].value;
@@ -465,6 +590,7 @@ void init_window_parameters(struct Window *win_data)
 	// win_data->current_menuitem_cursor_shape;
 #endif
 	// win_data->confirm_to_close_multi_tabs = FALSE;
+	win_data->confirm_to_kill_running_command = TRUE;
 	// win_data->confirm_to_execute_command = TRUE;			// inited in init_prime_user_datas()
 	// Don't forget to edit windows.c if you change the default volue here.
 	// win_data->execute_command_whitelist = g_strdup("");		// inited in init_prime_user_datas()
@@ -545,6 +671,8 @@ void init_page_parameters(struct Window *win_data, struct Page *page_data)
 //	page_data->window_title = NULL;
 
 //	page_data->tag[COMMAND] = {{0}};
+//	page_data->match_regex_setted = FALSE;
+//
 }
 
 
@@ -605,6 +733,10 @@ void init_user_keys(struct Window *win_data)
 	win_data->user_keys[KEY_COPY_CLIPBOARD].value = g_strdup("Ctrl Delete");
 	// paste the text in clipboard
 	win_data->user_keys[KEY_PASTE_CLIPBOARD].value = g_strdup("Ctrl Insert");
+	// copy the text in primary clipboard
+	win_data->user_keys[KEY_COPY_PRIMARY].value = g_strdup("");
+	// paste the text in primary clipboard
+	win_data->user_keys[KEY_PASTE_PRIMARY].value = g_strdup("Shift Insert");
 	// Increase the font size
 	win_data->user_keys[KEY_INCREASE_FONT_SIZE].value = g_strdup("Ctrl equal");
 	// decrease the font size
@@ -620,8 +752,9 @@ void init_user_keys(struct Window *win_data)
 	win_data->user_keys[KEY_SCROLL_DOWN].value = g_strdup("Shift Right");
 	win_data->user_keys[KEY_SCROLL_UP_1_LINE].value = g_strdup("Shift Up");
 	win_data->user_keys[KEY_SCROLL_DOWN_1_LINE].value = g_strdup("Shift Down");
-	// paste the text in primary clipboard
-	win_data->user_keys[KEY_PASTE_PRIMARY].value = g_strdup("Shift Insert");
+	win_data->user_keys[KEY_CLEAN_SCROLLBACK_LINES].value = g_strdup("Ctrl H");
+	win_data->user_keys[KEY_DISABLE_URL_L].value = g_strdup("Control_L");
+	win_data->user_keys[KEY_DISABLE_URL_R].value = g_strdup("Control_R");
 #ifdef FATAL
 	// dump_data
 	win_data->user_keys[KEY_DUMP_DATA].value = g_strdup("Ctrl Print");
@@ -677,6 +810,10 @@ void init_key_bindings_name_and_group()
 	system_keys[KEY_COPY_CLIPBOARD].group = KEY_GROUP_TEXT;
 	system_keys[KEY_PASTE_CLIPBOARD].name = "paste_clipboard";
 	system_keys[KEY_PASTE_CLIPBOARD].group = KEY_GROUP_TEXT;
+	system_keys[KEY_COPY_PRIMARY].name = "copy_clipboard in primary";
+	system_keys[KEY_COPY_PRIMARY].group = KEY_GROUP_TEXT;
+	system_keys[KEY_PASTE_PRIMARY].name = "paste_clipboard in primary";
+	system_keys[KEY_PASTE_PRIMARY].group = KEY_GROUP_TEXT;
 	system_keys[KEY_INCREASE_FONT_SIZE].name = "increase_font_size";
 	system_keys[KEY_INCREASE_FONT_SIZE].group = KEY_GROUP_FONT;
 	system_keys[KEY_DECREASE_FONT_SIZE].name = "decrease_font_size";
@@ -695,8 +832,12 @@ void init_key_bindings_name_and_group()
 	system_keys[KEY_SCROLL_UP_1_LINE].group = KEY_GROUP_SCROLL;
 	system_keys[KEY_SCROLL_DOWN_1_LINE].name = "scroll_down_1_line";
 	system_keys[KEY_SCROLL_DOWN_1_LINE].group = KEY_GROUP_SCROLL;
-	system_keys[KEY_PASTE_PRIMARY].name = "paste_clipboard in primary";
-	system_keys[KEY_PASTE_PRIMARY].group = KEY_GROUP_NONE;
+	system_keys[KEY_CLEAN_SCROLLBACK_LINES].name = "clean_scrollback_lines";
+	system_keys[KEY_CLEAN_SCROLLBACK_LINES].group = KEY_GROUP_SCROLL;
+	system_keys[KEY_DISABLE_URL_L].name = "disable_url_for_temporary_L";
+	system_keys[KEY_DISABLE_URL_L].group = KEY_GROUP_NONE;
+	system_keys[KEY_DISABLE_URL_R].name = "disable_url_for_temporary_R";
+	system_keys[KEY_DISABLE_URL_R].group = KEY_GROUP_NONE;
 #ifdef FATAL
 	system_keys[KEY_DUMP_DATA].name = "dump_data";
 	system_keys[KEY_DUMP_DATA].group = KEY_GROUP_MISC;
@@ -802,7 +943,15 @@ void init_key_bindings()
 	// paste the text in clipboard
 	system_keys[KEY_PASTE_CLIPBOARD].topic = _("Paste the text");
 	system_keys[KEY_PASTE_CLIPBOARD].comment = "# Paste the text in clipboard.";
-	system_keys[KEY_PASTE_CLIPBOARD].translation = _("Paste the text in clipboard.");
+	system_keys[KEY_PASTE_CLIPBOARD].translation = _("Paste the text in clipboard to the Vte Terminal box.");
+	// copy the text to primary clipboard
+	system_keys[KEY_COPY_PRIMARY].topic = _("Copy the text to primary clipboard");
+	system_keys[KEY_COPY_PRIMARY].comment = "# Copy the text to the primary clipboard.";
+	system_keys[KEY_COPY_PRIMARY].translation = _("Copy the text to the primary clipboard.\nNormally it is copied to the primary clipboard already\nwhen you selected some text with mouse.");
+	// paste the text in primary clipboard
+	system_keys[KEY_PASTE_PRIMARY].topic = _("Paste the text in primary clipboard");
+	system_keys[KEY_PASTE_PRIMARY].comment = "# Paste the text in the primary clipboard.";
+	system_keys[KEY_PASTE_PRIMARY].translation = _("Paste the text in the primary clipboard to the Vte Terminal box.\nThe default key binding is <Shift><Insert> in libvte if you disable it here.");
 	// Increase the font size
 	system_keys[KEY_INCREASE_FONT_SIZE].topic = _("Increase font size");
 	system_keys[KEY_INCREASE_FONT_SIZE].comment = "# Increase the font size of current tab.";
@@ -816,9 +965,9 @@ void init_key_bindings()
 	system_keys[KEY_RESET_FONT_SIZE].comment = "# Reset the font of current tab to original size.";
 	system_keys[KEY_RESET_FONT_SIZE].translation = _("Reset the font of current tab to original size.");
 	// max window
-	system_keys[KEY_MAX_WINDOW].topic = _("Maximum the window");
-	system_keys[KEY_MAX_WINDOW].comment = "# Try to maximum the window to use all available space on your display.";
-	system_keys[KEY_MAX_WINDOW].translation = _("Try to maximum the window to use all available space on your display.");
+	system_keys[KEY_MAX_WINDOW].topic = _("Maximize the window");
+	system_keys[KEY_MAX_WINDOW].comment = "# Try to maximize the window to use all available space on your display.";
+	system_keys[KEY_MAX_WINDOW].translation = _("Try to maximize the window to use all available space on your display.");
 	// full screen
 	system_keys[KEY_FULL_SCREEN].topic = _("Full screen");
 	system_keys[KEY_FULL_SCREEN].comment = "# Asks to place window in the fullscreen/unfullscreen state.";
@@ -839,10 +988,17 @@ void init_key_bindings()
 	system_keys[KEY_SCROLL_DOWN_1_LINE].topic = _("Scroll down 1 line");
 	system_keys[KEY_SCROLL_DOWN_1_LINE].comment = "# Asks to scroll down 1 line on Vte Terminal box.";
 	system_keys[KEY_SCROLL_DOWN_1_LINE].translation = _("Asks to scroll down 1 line on Vte Terminal box.");
-	// paste the text in clipboard
-	system_keys[KEY_PASTE_PRIMARY].topic = "Paste the text in primary";
-	system_keys[KEY_PASTE_PRIMARY].comment = "# Paste the text in the primary clipboard.";
-	system_keys[KEY_PASTE_PRIMARY].translation = "Paste the text in the primary clipboard.";
+	// clean scroll history
+	system_keys[KEY_CLEAN_SCROLLBACK_LINES].topic = _("Clean scrollback lines");
+	system_keys[KEY_CLEAN_SCROLLBACK_LINES].comment = "# Asks to clean scrollback lines.";
+	system_keys[KEY_CLEAN_SCROLLBACK_LINES].translation = _("Asks to clean scrollback lines.");
+	// disable URL for temporary
+	system_keys[KEY_DISABLE_URL_L].topic = "Disable URL for temporary";
+	system_keys[KEY_DISABLE_URL_L].comment = "# Disable URL for temporary.";
+	system_keys[KEY_DISABLE_URL_L].translation = "Disable URL for temporary.";
+	system_keys[KEY_DISABLE_URL_R].topic = "Disable URL for temporary";
+	system_keys[KEY_DISABLE_URL_R].comment = "# Disable URL for temporary.";
+	system_keys[KEY_DISABLE_URL_R].translation = "Disable URL for temporary.";
 #ifdef FATAL
 	system_keys[KEY_DUMP_DATA].topic = _("Dump runtime debug data");
 	system_keys[KEY_DUMP_DATA].comment = "# Dump the runtime data of LilyTerm for debug.";
@@ -1009,7 +1165,7 @@ void init_user_color(struct Window *win_data, gchar *theme_name)
 	for (i=0; i<THEME; i++)
 	{
 		// g_debug("(%p) Set win_data->custom_color_theme[%d]->name = %s", win_data, i, system_color_theme[i].name);
-		win_data->custom_color_theme[i].index = system_color_theme[i].index + COLOR;
+		win_data->custom_color_theme[i].index = system_color_theme[i].index + THEME;
 		win_data->custom_color_theme[i].name = system_color_theme[i].name;
 		for (j=0; j<COLOR; j++)
 			win_data->custom_color_theme[i].color[j] = system_color_theme[i].color[j];
@@ -1155,7 +1311,7 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 	// g_debug ("Using the profile: %s ", profile);
 
 	gchar *fg_color_str = NULL, *bg_color_str = NULL, *color_theme_str = NULL, *cursor_color_str = NULL;
-	
+
 	// g_debug("safe_mode = %d", safe_mode);
 	if (win_data->profile != NULL && (! safe_mode))
 	{
@@ -1181,7 +1337,10 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 
 			win_data->default_row = check_integer_value(keyfile, "main", "row", win_data->default_row,
 								    DISABLE_EMPTY_STR, SYSTEM_ROW, DISABLE_ZERO, CHECK_MIN, 1, NO_CHECK_MAX, 0);
-
+#ifdef USE_GTK3_GEOMETRY_METHOD
+			win_data->geometry_width = win_data->default_column;
+			win_data->geometry_height = win_data->default_row;
+#endif
 
 #ifdef ENABLE_RGBA
 			win_data->transparent_window = check_integer_value(keyfile, "main", "transparent_window",
@@ -1199,9 +1358,15 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 									CHECK_MIN, 0, CHECK_MAX, 1);
 			// g_debug("Got win_data->window_opacity_inactive = %1.3f", win_data->window_opacity_inactive);
 #endif
+#ifdef USE_GTK2_GEOMETRY_METHOD
 			win_data->startup_fullscreen = check_boolean_value(keyfile, "main", "fullscreen",
 									   win_data->fullscreen);
-
+#endif
+#ifdef USE_GTK3_GEOMETRY_METHOD
+			gboolean fullscreen = check_boolean_value(keyfile, "main", "fullscreen", win_data->window_status);
+			if (fullscreen) win_data->window_status = WINDOW_START_WITH_FULL_SCREEN;
+#endif
+#if defined(ENABLE_VTE_BACKGROUND) || defined(FORCE_ENABLE_VTE_BACKGROUND)
 			win_data->transparent_background = check_integer_value(keyfile, "main", "transparent_background",
 							win_data->transparent_background, DISABLE_EMPTY_STR, 0, ENABLE_ZERO, CHECK_MIN, 0, CHECK_MAX, 2);
 
@@ -1215,7 +1380,7 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 
 			win_data->background_image = check_string_value(keyfile, "main", "background_image",
 									win_data->background_image, TRUE, DISABLE_EMPTY_STR);
-
+#endif
 			win_data->foreground_program_whitelist = check_string_value(keyfile, "main",
 										    "foreground_program_whitelist",
 										    win_data->foreground_program_whitelist,
@@ -1237,6 +1402,11 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 			win_data->confirm_to_close_multi_tabs = check_boolean_value(keyfile, "main",
 										    "confirm_to_close_multi_tabs",
 										    win_data->confirm_to_close_multi_tabs);
+
+			win_data->confirm_to_kill_running_command = check_boolean_value(keyfile, "main",
+											"confirm_to_kill_running_command",
+											win_data->confirm_to_kill_running_command);
+
 			win_data->show_background_menu = check_boolean_value(keyfile, "main", "show_background_menu",
 									     win_data->show_background_menu);
 
@@ -1248,6 +1418,11 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 			bg_color_str = check_string_value(keyfile, "main", "background_color", DEFAULT_BACKGROUND_COLOR, FALSE, DISABLE_EMPTY_STR);
 
 			cursor_color_str = check_string_value(keyfile, "main", "cursor_color", DEFAULT_CURSOR_COLOR, FALSE, DISABLE_EMPTY_STR);
+
+			win_data->custom_cursor_color = ! check_boolean_value(keyfile, "main", "disable_custom_cursor_color",
+									      ! win_data->custom_cursor_color);
+
+			if (cursor_color_str == NULL) win_data->custom_cursor_color = FALSE;
 
 			win_data->show_resize_menu = check_boolean_value(keyfile, "main", "show_resize_menu",
 									 win_data->show_resize_menu);
@@ -1264,10 +1439,10 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 									   win_data->window_resize_ratio,
 									   DISABLE_EMPTY_STR, 0,
 									   CHECK_MIN, 0, NO_CHECK_MAX, 0);
-
+#ifdef ENABLE_SET_WORD_CHARS
 			win_data->word_chars = check_string_value(keyfile, "main", "word_chars", win_data->word_chars,
 								  TRUE, ENABLE_EMPTY_STR);
-
+#endif
 			win_data->scrollback_lines = check_integer_value(keyfile,
 									  "main",
 									  "scrollback_lines",
@@ -1303,9 +1478,10 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 			win_data->scroll_bar_position = check_boolean_value(keyfile, "main",
 						       "scroll_bar_position", win_data->scroll_bar_position);
 
+#ifdef ENABLE_IM_APPEND_MENUITEMS
 			win_data->show_input_method_menu = check_boolean_value(keyfile, "main", "show_input_method_menu",
 								     win_data->show_input_method_menu);
-
+#endif
 			win_data->show_change_page_name_menu = check_boolean_value(keyfile, "main",
 					"show_change_page_name_menu", win_data->show_change_page_name_menu);
 
@@ -1327,6 +1503,15 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 			win_data->cursor_blinks = check_boolean_value(keyfile, "main", "cursor_blinks",
 								      win_data->cursor_blinks);
 #endif
+			win_data->allow_bold_text = check_boolean_value(keyfile, "main", "allow_bold_text",
+								  win_data->allow_bold_text);
+
+			win_data->open_url_with_ctrl_pressed = check_boolean_value(keyfile, "main", "open_url_with_ctrl_pressed",
+										   win_data->open_url_with_ctrl_pressed);
+
+			win_data->disable_url_when_ctrl_pressed = check_boolean_value(keyfile, "main", "disable_url_when_ctrl_pressed",
+										      win_data->disable_url_when_ctrl_pressed);
+			if (win_data->disable_url_when_ctrl_pressed) win_data->open_url_with_ctrl_pressed = FALSE;
 
 			win_data->show_copy_paste_menu =
 				check_boolean_value(keyfile,
@@ -1344,17 +1529,18 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 								     "main",
 								     "audible_bell",
 								     win_data->audible_bell);
-
+#ifdef ENABLE_VISIBLE_BELL
 			win_data->visible_bell = check_boolean_value(keyfile,
 								     "main",
 								     "visible_bell",
 								      win_data->visible_bell);
-
+#endif
+#ifdef ENABLE_BEEP_SINGAL
 			win_data->urgent_bell = check_boolean_value(keyfile,
 								    "main",
 								    "urgent_bell",
 								    win_data->urgent_bell);
-
+#endif
 			// g_debug("VTE_ERASE_AUTO = %d, VTE_ERASE_ASCII_BACKSPACE = %d, "
 			//	"VTE_ERASE_ASCII_DELETE = %d, VTE_ERASE_DELETE_SEQUENCE %d",
 			//	VTE_ERASE_AUTO, VTE_ERASE_ASCII_BACKSPACE,
@@ -1379,9 +1565,17 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 								     win_data->locales_list, TRUE, ENABLE_EMPTY_STR);
 			// g_debug("Got locales_list = %s from user's profile!", value);
 
+			win_data->default_shell = check_string_value( keyfile, "main", "default_shell",
+								      win_data->default_shell, TRUE, DISABLE_EMPTY_STR);
+			if (win_data->default_shell)
+			{
+				g_free(win_data->shell);
+				win_data->shell = g_strdup(win_data->default_shell);
+			}
+#ifdef ENABLE_SET_EMULATION
 			win_data->emulate_term = check_string_value( keyfile, "main", "emulate_term",
 								     win_data->emulate_term, TRUE, DISABLE_EMPTY_STR);
-
+#endif
 			win_data->VTE_CJK_WIDTH = check_integer_value( keyfile, "main", "VTE_CJK_WIDTH",
 								       win_data->VTE_CJK_WIDTH,
 								       DISABLE_EMPTY_STR, 0,
@@ -1486,7 +1680,7 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 			//		GDK_SHIFT_MASK, GDK_LOCK_MASK, GDK_CONTROL_MASK, GDK_MOD1_MASK,
 			//		GDK_MOD2_MASK, GDK_MOD3_MASK, GDK_MOD4_MASK, GDK_MOD5_MASK);
 			gchar *value = NULL;
-			for (i=0; i<KEYS; i++)
+			for (i=0; i<KEYS-FIXED_KEYS; i++)
 			{
 				// g_debug("Checking %s key, default value = %s (%p)...",
 				//	system_keys[i].name, win_data->user_keys[i].value, win_data->user_keys[i].value);
@@ -1497,9 +1691,62 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 				convert_string_to_user_key(i, value, win_data);
 			}
 
+			for (i=0; i<REGEX; i++)
+			{
+				win_data->user_regex[i] = check_string_value(keyfile, "command",
+									     regex_name[i], NULL, TRUE, DISABLE_EMPTY_STR);
+				// gchar *regex_str = convert_escape_sequence_to_string(win_data->user_regex[i]);
+				// g_debug("get_user_settings: Got win_data->user_regex[%d] = %s", i, regex_str);
+				// g_free(regex_str);
+			}
+
+			if (win_data->user_regex[REGEX_USERNAME] || win_data->user_regex[REGEX_PASSWORD] || win_data->user_regex[REGEX_HOSTNAME] ||
+			    win_data->user_regex[REGEX_ADDRESS_BODY] || win_data->user_regex[REGEX_ADDRESS_END])
+			{
+				gchar *username = (win_data->user_regex[REGEX_USERNAME] == NULL)? USERNAME: win_data->user_regex[REGEX_USERNAME];
+				gchar *password = (win_data->user_regex[REGEX_PASSWORD] == NULL)? PASSWORD: win_data->user_regex[REGEX_PASSWORD];
+				gchar *hostname = (win_data->user_regex[REGEX_HOSTNAME] == NULL)? HOSTNAME: win_data->user_regex[REGEX_HOSTNAME];
+				gchar *address_body = (win_data->user_regex[REGEX_ADDRESS_BODY] == NULL)? ADDRESS_BODY: win_data->user_regex[REGEX_ADDRESS_BODY];
+				gchar *address_end = (win_data->user_regex[REGEX_ADDRESS_END] == NULL)? ADDRESS_BODY: win_data->user_regex[REGEX_ADDRESS_END];
+
+				// WWW
+				gchar *regex_str = g_strdup_printf("[Hh][Tt][Tt][Pp][Ss]?://(%s%s@)?%s%s(/%s%s)?/*",
+								    username, password, hostname, PORT, address_body, address_end);
+				win_data->user_command[TAG_WWW].match_regex = convert_escape_sequence_from_string(regex_str);
+				g_free(regex_str);
+
+				// FTP
+				regex_str = g_strdup_printf("[Ff][Tt][Pp][Ss]?://(%s%s@)?%s%s(/%s%s)?/*",
+								    username, password, hostname, PORT, address_body, address_end);
+				win_data->user_command[TAG_FTP].match_regex = convert_escape_sequence_from_string(regex_str);
+				g_free(regex_str);
+
+				// FILE
+				if (win_data->user_regex[REGEX_ADDRESS_BODY] || win_data->user_regex[REGEX_ADDRESS_END])
+				{
+					regex_str = g_strdup_printf("[Ff][Ii][Ll][Ee]://%s%s", address_body, address_end);
+					win_data->user_command[TAG_FILE].match_regex = convert_escape_sequence_from_string(regex_str);
+					g_free(regex_str);
+				}
+
+				// MAIL
+				if (win_data->user_regex[REGEX_USERNAME] || win_data->user_regex[REGEX_HOSTNAME])
+				{
+					regex_str = g_strdup_printf("([Mm][Aa][Ii][Ll][Tt][Oo]:)?%s@%s", username, hostname);
+					win_data->user_command[TAG_MAIL].match_regex = convert_escape_sequence_from_string(regex_str);
+					g_free(regex_str);
+				}
+			}
+			// for (i=0; i<COMMAND; i++)
+			// {
+			//	gchar *regex_str = convert_escape_sequence_to_string(win_data->user_command[i].match_regex);
+			//	g_debug("get_user_settings: Got win_data->user_command[%d].match_regex = %s", i, regex_str);
+			//	g_free(regex_str);
+			// }
+
 			for (i=0; i<COMMAND; i++)
 			{
-				win_data->user_command[i].command = check_string_value(keyfile,	"command",
+				win_data->user_command[i].command = check_string_value(keyfile, "command",
 						command[i].name, win_data->user_command[i].command, TRUE, DISABLE_EMPTY_STR);
 				win_data->user_command[i].method = check_integer_value(
 						keyfile, "command", command[i].method_name,
@@ -1519,8 +1766,18 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 						CHECK_MAX, 2);
 				win_data->user_command[i].locale = check_string_value(keyfile, "command",
 						command[i].locale_name, win_data->user_command[i].locale, TRUE, DISABLE_EMPTY_STR);
-				//g_debug("command[i].name = %s (%d)",
+				// g_debug("command[i].name = %s (%d)",
 				//	win_data->user_command[i].command, win_data->user_command[i].method);
+
+				gchar *match_regex = check_string_value(keyfile, "command",
+									command[i].match_regex_name,
+									NULL,
+									TRUE,
+									DISABLE_EMPTY_STR);
+				win_data->user_command[i].match_regex_orig = convert_escape_sequence_from_string(match_regex);
+				g_free(match_regex);
+
+				// g_debug("command[%d].match_regex_orig = %s", i, win_data->user_command[i].match_regex_orig);
 			}
 
 			color_theme_str = check_string_value(keyfile, "color", "theme", NULL, FALSE, ENABLE_EMPTY_STR);
@@ -1530,6 +1787,7 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 			win_data->invert_color = check_boolean_value(keyfile, "color", "invert_color", win_data->invert_color);
 			win_data->use_custom_theme = check_boolean_value(keyfile, "color", "custom_theme", win_data->use_custom_theme);
 
+#ifdef ENABLE_GDKCOLOR_TO_STRING
 			gchar *color_value;
 			for (i=1; i<COLOR-1; i++)
 			{
@@ -1538,7 +1796,7 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 				//	i, color[i].name, color_value);
 				if (color_value)
 				{
-					GdkColor tmp_color;
+					GdkRGBA tmp_color;
 
 					if (check_color_value(color[i].name, color_value, &tmp_color, NULL))
 					{
@@ -1557,7 +1815,7 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 				}
 				g_free(color_value);
 			}
-
+#endif
 			win_data->color_brightness = check_double_value(keyfile,
 									"color",
 									"brightness",
@@ -1615,6 +1873,11 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 	}
 
 	// some defaults
+	glong column=0, row=0;
+	get_row_and_column_from_geometry_str(&column, &row, &(win_data->default_column), &(win_data->default_row), win_data->geometry);
+	win_data->default_column = column;
+	win_data->default_row = row;
+
 	win_data->splited_page_names = split_string(win_data->page_names, " ", -1);
 #ifdef SAFEMODE
 	if (win_data->splited_page_names==NULL)
@@ -1638,10 +1901,9 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 #ifdef ENABLE_RGBA
 	// g_debug("Got win_data->window_opacity_inactive = %1.3f", win_data->window_opacity_inactive);
 	if (win_data->window_opacity_inactive<-1)
-	{
-		win_data->dim_window = FALSE;
 		win_data->window_opacity_inactive = win_data->window_opacity;
-	}
+	else
+		win_data->dim_window = TRUE;
 #endif
 
 	if ((win_data->scrollback_lines == 0) && (win_data->show_scroll_bar == AUTOMATIC))
@@ -1650,7 +1912,9 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 	if (win_data->show_close_button_on_tab == 0) win_data->show_close_button_on_all_tabs = 0;
 	if (win_data->window_title_shows_current_page == 0) win_data->window_title_append_package_name = 0;
 
-	GdkColor fg_color, bg_color, cursor_color;
+	GdkRGBA fg_color, bg_color;
+#ifdef ENABLE_GDKCOLOR_TO_STRING
+	GdkRGBA cursor_color;
 
 	// g_debug("win_data->foreground_color = %s, win_data->background_color = %s, win_data->cursor_color_str = %s",
 	//	win_data->foreground_color, win_data->background_color, win_data->cursor_color_str);
@@ -1663,12 +1927,14 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 	dirty_gdk_color_parse (DEFAULT_CURSOR_COLOR, &(cursor_color));
 	check_color_value ("cursor_color", cursor_color_str, &(win_data->cursor_color), &(cursor_color));
 	// print_color(-1, "Get cursor_color from profile:", win_data->cursor_color);
+#endif
 
 	g_free(fg_color_str);
 	g_free(bg_color_str);
 	g_free(color_theme_str);
 	g_free(cursor_color_str);
 
+#ifdef ENABLE_GDKCOLOR_TO_STRING
 	// if the fg_color == bg_color, revert to the default color.
 	if (! compare_color(&(fg_color), &(bg_color)))
 	{
@@ -1677,6 +1943,7 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 		dirty_gdk_color_parse (DEFAULT_FOREGROUND_COLOR, &(fg_color));
 		dirty_gdk_color_parse (DEFAULT_BACKGROUND_COLOR, &(bg_color));
 	}
+#endif
 
 	// check if using custom fg_color
 	if (compare_color(&(fg_color), &(system_color_theme[win_data->color_theme_index].color[COLOR-1])))
@@ -1688,7 +1955,7 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 		for (i=0; i<THEME; i++)
 			win_data->custom_color_theme[i].color[COLOR-1] = fg_color;
 	}
-	
+
 	// check if using custom bg_color
 	if (compare_color(&(bg_color), &(system_color_theme[win_data->color_theme_index].color[0])))
 	{
@@ -1702,15 +1969,12 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 
 	// print_color(-1, "get_user_settings(): win_data->fg_color : ", win_data->fg_color);
 	// print_color(-1, "get_user_settings(): win_data->bg_color", win_data->bg_color);
-
+#ifdef ENABLE_GDKCOLOR_TO_STRING
 	// check if win_data->cursor_color == win_data->bg_color
 	if ((win_data->invert_color && (compare_color(&(fg_color), &(win_data->cursor_color)) == FALSE)) ||
 	    ((win_data->invert_color == FALSE) && (compare_color(&(bg_color), &(win_data->cursor_color)) == FALSE)))
-	{
-		// print_color (-1, "invild win_data->cursor_color", win_data->cursor_color);
-		dirty_gdk_color_parse (DEFAULT_CURSOR_COLOR, &(win_data->cursor_color));
-	}
-
+		win_data->custom_cursor_color = FALSE;
+#endif
 	generate_all_color_datas(win_data);
 
 	// g_debug("get_user_settings(): win_data->VTE_CJK_WIDTH_STR = %s", win_data->VTE_CJK_WIDTH_STR);
@@ -1731,11 +1995,12 @@ void get_user_settings(struct Window *win_data, const gchar *encoding)
 	}
 	if (win_data->transparent_window==2)
 		win_data->transparent_window = (win_data->use_rgba==-1)? 1: 0;
+#if defined(ENABLE_VTE_BACKGROUND) || defined(FORCE_ENABLE_VTE_BACKGROUND)
 	if (win_data->transparent_background==2)
 		win_data->transparent_background = (win_data->use_rgba==-1)? 1 :0;
 	// g_debug("win_data->transparent_window = %d", win_data->transparent_window);
 	// g_debug("win_data->transparent_background = %d", win_data->transparent_background);
-
+#  endif
 	set_window_opacity (NULL, 0, win_data->window_opacity, win_data);
 #endif
 
@@ -1789,8 +2054,8 @@ void init_prime_user_datas(struct Window *win_data)
 #ifdef SAFEMODE
 	if (win_data==NULL) return;
 #endif
-	// g_debug("init_prime_user_datas(): win_data->login_shell = %d", win_data->login_shell);
-	if ((win_data->login_shell < 0) || win_data->prime_user_datas_inited ) return;
+	// g_debug("init_prime_user_datas(): win_data->prime_user_datas_inited = %d", win_data->prime_user_datas_inited);
+	if (win_data->prime_user_datas_inited) return;
 
 	win_data->prime_user_datas_inited = TRUE;
 
@@ -1806,45 +2071,35 @@ void init_prime_user_datas(struct Window *win_data)
 void get_prime_user_settings(GKeyFile *keyfile, struct Window *win_data, gchar *encoding)
 {
 #ifdef DETAIL
-	if (win_data)
-		g_debug("! Launch get_prime_user_settings() with keyfile = %p, win_data = %p, encoding = %s, win_data->login_shell = %d!",
-			keyfile, win_data, encoding, win_data->login_shell);
-	else
-		g_debug("! Launch get_prime_user_settings() with keyfile = %p, win_data = %p, encoding = %s!",
-			keyfile, win_data, encoding);
+	g_debug("! Launch get_prime_user_settings() with keyfile = %p, win_data = %p, encoding = %s!",
+		keyfile, win_data, encoding);
 #endif
 #ifdef SAFEMODE
 	if ((keyfile==NULL) || (win_data==NULL)) return;
 #endif
-	if (win_data->login_shell < 0) return;
-
-	if (win_data->login_shell)
-		win_data->login_shell = -1;
-	else
-		win_data->login_shell = -2;
+	if (win_data->prime_user_settings_inited) return;
+	win_data->prime_user_settings_inited = TRUE;
 
 	// Check the profile version
 	check_profile_version (keyfile, win_data);
 
 	// Check if confirm_to_execute_command
-	win_data->confirm_to_execute_command = check_boolean_value(
-			keyfile, "main", "confirm_to_execute_command",
-			win_data->confirm_to_execute_command);
+	win_data->confirm_to_execute_command = check_boolean_value(keyfile, "main", "confirm_to_execute_command",
+								   win_data->confirm_to_execute_command);
 
 	win_data->execute_command_whitelist = check_string_value(keyfile, "main",
-					      "execute_command_whitelist",
-					      win_data->execute_command_whitelist,
-					      TRUE, 
-					      ENABLE_EMPTY_STR);
+								 "execute_command_whitelist",
+								 win_data->execute_command_whitelist,
+								 TRUE,
+								 ENABLE_EMPTY_STR);
 	// g_debug("win_data->execute_command_whitelist for win_data (%p) updated!", win_data);
 
-	win_data->execute_command_in_new_tab = check_boolean_value(
-			keyfile, "main", "execute_command_in_new_tab",
-			win_data->execute_command_in_new_tab);
+	win_data->execute_command_in_new_tab = check_boolean_value(keyfile, "main", "execute_command_in_new_tab",
+								   win_data->execute_command_in_new_tab);
 
 	// g_debug("ReGet new win_data->default_locale with original value: %s...", win_data->default_locale);
-	win_data->default_locale = check_string_value( keyfile, "main", "default_locale",
-						     win_data->default_locale, TRUE, DISABLE_EMPTY_STR);
+	win_data->default_locale = check_string_value(keyfile, "main", "default_locale",
+						      win_data->default_locale, TRUE, DISABLE_EMPTY_STR);
 	// g_debug("win_data->default_locale = %s", win_data->default_locale);
 #ifdef SAFEMODE
 	if ( win_data->default_locale && (win_data->default_locale[0]!='\0'))
@@ -2002,7 +2257,7 @@ FINISH:
 
 // original_value will be free() in check_string_value()
 // The returned string should be freed when no longer needed.
-gchar *check_string_value(GKeyFile *keyfile, const gchar *group_name, const gchar *key, gchar *original_value, 
+gchar *check_string_value(GKeyFile *keyfile, const gchar *group_name, const gchar *key, gchar *original_value,
 			  gboolean free_original_value, Check_Empty enable_empty)
 {
 #ifdef DETAIL
@@ -2032,7 +2287,8 @@ gchar *check_string_value(GKeyFile *keyfile, const gchar *group_name, const gcha
 	return setting;
 }
 
-gboolean check_color_value (const gchar *key_name, const gchar *color_name, GdkColor *color, const GdkColor *default_color)
+#ifdef ENABLE_GDKCOLOR_TO_STRING
+gboolean check_color_value(const gchar *key_name, const gchar *color_name, GdkRGBA *color, const GdkRGBA *default_color)
 {
 #ifdef DETAIL
 	g_debug("! Launch check_color_value() with key_name = %s, color_name = %s, color = %p",
@@ -2056,7 +2312,7 @@ gboolean check_color_value (const gchar *key_name, const gchar *color_name, GdkC
 		// print_color(-1, "2. check_color_value():", *color);
 		return TRUE;
 	}
-	
+
 #ifdef UNIT_TEST
 	g_message("\"%s = %s\" is not a valid color value! Please check!",
 		  key_name, color_name);
@@ -2066,6 +2322,7 @@ gboolean check_color_value (const gchar *key_name, const gchar *color_name, GdkC
 #endif
 	return FALSE;
 }
+#endif
 
 // return TRUE if 'key_name' is a valid key or NULL; or it will return FALSE.
 gboolean accelerator_parse (const gchar *key_name, const gchar *key_value, guint *key, guint *mods)
@@ -2216,6 +2473,7 @@ GString *save_user_settings(GtkWidget *widget, struct Window *win_data)
 #ifdef SAFEMODE
 		if (page_data==NULL)
 		{
+			// g_debug("save_user_settings(): Trying to free win_data (%p)", win_data);
 			g_free(win_data);
 			return NULL;
 		}
@@ -2229,6 +2487,7 @@ GString *save_user_settings(GtkWidget *widget, struct Window *win_data)
 		init_command();
 		init_user_command(win_data);
 		init_colors();
+		init_user_color(win_data, "");
 	}
 
 	gchar *lc_numeric = g_strdup((char*)g_getenv("LC_NUMERIC"));
@@ -2277,8 +2536,14 @@ GString *save_user_settings(GtkWidget *widget, struct Window *win_data)
 						"# Disable it will disable transparent_window, too.\n"
 						"use_rgba = \n\n");
 	}
+#ifdef USE_GTK2_GEOMETRY_METHOD
 	g_string_append_printf(contents,"# Start up with fullscreen.\n"
 					"fullscreen = %d\n\n", win_data->true_fullscreen);
+#endif
+#ifdef USE_GTK3_GEOMETRY_METHOD
+	g_string_append_printf(contents,"# Start up with fullscreen.\n"
+					"fullscreen = %d\n\n", (win_data->window_status==WINDOW_FULL_SCREEN));
+#endif
 #ifdef ENABLE_RGBA
 	g_string_append_printf(contents,"# Transparent window. Only enabled when the window manager were composited.\n"
 					"transparent_window = %d\n\n", (win_data->transparent_window==1));
@@ -2291,6 +2556,7 @@ GString *save_user_settings(GtkWidget *widget, struct Window *win_data)
 	else
 		g_string_append(contents,"window_opacity_inactive = \n\n");
 #endif
+#if defined(ENABLE_VTE_BACKGROUND) || defined(FORCE_ENABLE_VTE_BACKGROUND)
 	g_string_append_printf(contents,"# Use transparent background.\n"
 					"# It will use true transparent if the window manager were composited.\n"
 					"transparent_background = %d\n\n", (win_data->transparent_background==1));
@@ -2304,6 +2570,7 @@ GString *save_user_settings(GtkWidget *widget, struct Window *win_data)
 	else
 		g_string_append(contents,"# Sets a background image.\n"
 					 "background_image = \n\n");
+#endif
 	g_string_append_printf(contents,"# Confirm to execute command with -e/-x/--execute option.\n"
 					"confirm_to_execute_command = %d\n\n", win_data->confirm_to_execute_command);
 	g_string_append_printf(contents,"# Don't need to confirm for executing a program if it's in the whitelist,\n"
@@ -2327,19 +2594,22 @@ GString *save_user_settings(GtkWidget *widget, struct Window *win_data)
 					"paste_texts_whitelist = %s\n\n", win_data->paste_texts_whitelist);
 	g_string_append_printf(contents,"# Confirm to close multi tabs.\n"
 					"confirm_to_close_multi_tabs = %d\n\n", win_data->confirm_to_close_multi_tabs);
+	g_string_append_printf(contents,"# Confirm to kill running command when exiting.\n"
+					"confirm_to_kill_running_command = %d\n\n", win_data->confirm_to_kill_running_command);
 	g_string_append_printf(contents,"# Shows [Transparent Background], [Background Saturation]\n"
 					"# [Transparent Window] and [Window Opacity] on right click menu.\n"
 					"show_background_menu = %d\n\n", win_data->show_background_menu);
 	g_string_append_printf(contents,"# Shows [Change the foreground color]\n"
 					"# and [Change the background color] on right click menu.\n"
 					"show_color_selection_menu = %d\n\n", win_data->show_color_selection_menu);
+#ifdef ENABLE_GDKCOLOR_TO_STRING
 	g_string_append_printf(contents,"# The normal text color used in vte terminal.\n"
 					"# You may use black, #000000 or #000000000000 here.\n");
-	
+
 	if (compare_color(&(win_data->custom_color_theme[win_data->color_theme_index].color[COLOR-1]),
 			  &(system_color_theme[win_data->color_theme_index].color[COLOR-1])))
 	{
-		gchar *color_str = gdk_color_to_string(&(win_data->custom_color_theme[win_data->color_theme_index].color[COLOR-1]));
+		gchar *color_str = dirty_gdk_rgba_to_string(&(win_data->custom_color_theme[win_data->color_theme_index].color[COLOR-1]));
 		g_string_append_printf(contents,"foreground_color = %s\n\n", color_str);
 		g_free (color_str);
 	}
@@ -2351,27 +2621,22 @@ GString *save_user_settings(GtkWidget *widget, struct Window *win_data)
 	if (compare_color(&(win_data->custom_color_theme[win_data->color_theme_index].color[0]),
 			  &(system_color_theme[win_data->color_theme_index].color[0])))
 	{
-		gchar *color_str = gdk_color_to_string(&(win_data->custom_color_theme[win_data->color_theme_index].color[0]));
+		gchar *color_str = dirty_gdk_rgba_to_string(&(win_data->custom_color_theme[win_data->color_theme_index].color[0]));
 		g_string_append_printf(contents,"background_color = %s\n\n", color_str);
 		g_free (color_str);
 	}
 	else
 		g_string_append(contents,"background_color = \n\n");
 
+	g_string_append_printf(contents,"# Drawn the text under the cursor with foreground and background colors reversed.\n"
+					"disable_custom_cursor_color = %d\n\n", ! win_data->custom_cursor_color);
 	g_string_append(contents,"# Sets the background color for text which is under the cursor.\n"
 				 "# You may use black, #000000 or #000000000000 here.\n");
-	
-	GdkColor cursor_color;
-	dirty_gdk_color_parse(DEFAULT_CURSOR_COLOR, &cursor_color);
-	if (compare_color(&cursor_color, &(win_data->cursor_color)))
-	{
-		gchar *color_str = gdk_color_to_string(&(win_data->cursor_color));
-		g_string_append_printf(contents,"cursor_color = %s\n\n", color_str);
-		g_free (color_str);
-	}
-	else
-		g_string_append(contents,"cursor_color = \n\n");
-	
+
+	gchar *color_str = dirty_gdk_rgba_to_string(&(win_data->cursor_color));
+	g_string_append_printf(contents,"cursor_color = %s\n\n", color_str);
+	g_free (color_str);
+#endif
 	g_string_append_printf(contents,"# Shows [Increase window size], [Decrease window size],\n"
 					"# [Reset to default font/size] and [Reset to system font/size]\n"
 					"# on right click menu.\n"
@@ -2387,8 +2652,10 @@ GString *save_user_settings(GtkWidget *widget, struct Window *win_data)
 	g_string_append_printf(contents,"# The ratio when resizing window via right click menu.\n"
 					"# 0: the font size is +/- 1 when resizing window.\n"
 					"window_resize_ratio = %1.3f\n\n", win_data->window_resize_ratio);
+#ifdef ENABLE_SET_WORD_CHARS
 	g_string_append_printf(contents,"# When user double clicks on a text, which character will be selected.\n"
 					"word_chars = %s\n\n", win_data->word_chars);
+#endif
 	g_string_append_printf(contents,"# The lines of scrollback history. -1 means unlimited (vte >= 0.22.3).\n"
 					"scrollback_lines = %d\n\n", win_data->scrollback_lines);
 	g_string_append(contents,"# Shows scroll_bar or not.\n"
@@ -2410,8 +2677,10 @@ GString *save_user_settings(GtkWidget *widget, struct Window *win_data)
 	g_string_append_printf(contents,"# The position of scroll_bar.\n"
 					"# 0: scroll_bar is on left; 1: scroll_bar is on right.\n"
 					"scroll_bar_position = %d\n\n", win_data->scroll_bar_position);
+#ifdef ENABLE_IM_APPEND_MENUITEMS
 	g_string_append_printf(contents,"# Shows input method menu on right click menu.\n"
 					"show_input_method_menu = %d\n\n", win_data->show_input_method_menu);
+#endif
 	g_string_append_printf(contents,"# Shows change page name menu on right click menu.\n"
 					"show_change_page_name_menu = %d\n\n", win_data->show_change_page_name_menu);
 	g_string_append_printf(contents,"# Shows exit menu on right click menu.\n"
@@ -2425,6 +2694,12 @@ GString *save_user_settings(GtkWidget *widget, struct Window *win_data)
 					"# 2: Cursor does not blink.\n"
 #endif
 					"cursor_blinks = %d\n\n", win_data->cursor_blinks);
+	g_string_append_printf(contents,"# Allow bold text in the terminal.\n"
+					"allow_bold_text = %d\n\n", win_data->allow_bold_text);
+	g_string_append_printf(contents,"# Need <Ctrl> to be pressed to open the URL when it's clicked.\n"
+					"open_url_with_ctrl_pressed = %d\n\n", win_data->open_url_with_ctrl_pressed);
+	g_string_append_printf(contents,"# Preese <Ctrl> to disable the URL match gregex temporarily.\n"
+					"disable_url_when_ctrl_pressed = %d\n\n", win_data->disable_url_when_ctrl_pressed);
 	g_string_append_printf(contents,"# Shows copy/paste menu on right click menu.\n"
 					"show_copy_paste_menu = %d\n\n",
 					win_data->show_copy_paste_menu);
@@ -2434,12 +2709,16 @@ GString *save_user_settings(GtkWidget *widget, struct Window *win_data)
 	g_string_append_printf(contents,"# Sets whether or not the terminal will beep\n"
 					"# when the child outputs the \"bl\" sequence.\n"
 					"audible_bell = %d\n\n", win_data->audible_bell);
+#ifdef ENABLE_VISIBLE_BELL
 	g_string_append_printf(contents,"# Sets whether or not the terminal will flash\n"
 					"# when the child outputs the \"bl\" sequence.\n"
 					"visible_bell = %d\n\n", win_data->visible_bell);
+#endif
+#ifdef ENABLE_BEEP_SINGAL
 	g_string_append_printf(contents,"# Sets whether or not the window's urgent tag will be set\n"
 					"# when the child outputs the \"bl\" sequence.\n"
 					"urgent_bell = %d\n\n", win_data->urgent_bell);
+#endif
 	g_string_append_printf(contents,"# Which string the terminal should send to an application\n"
 					"# when the user presses the Delete or Backspace keys.\n"
 					"# 0: VTE_ERASE_AUTO\n"
@@ -2465,10 +2744,20 @@ GString *save_user_settings(GtkWidget *widget, struct Window *win_data)
 					"# You may want to use \"UTF-8\" here if you have no locale data installed.\n"
 					"# Left it blank will disable locale and encoding select menu items.\n"
 					"locales_list = %s\n\n", win_data->locales_list);
+	g_string_append_printf(contents,"# The default shell (for example: /bin/sh) used in LilyTerm.\n"
+					"# The setting here will overwrite the SHELL environment.\n");
+	if (win_data->default_shell)
+		g_string_append_printf(contents,
+					"default_shell = %s\n\n", win_data->default_shell);
+	else
+		g_string_append(contents,
+					"default_shell = \n\n");
+#ifdef ENABLE_SET_EMULATION
 	g_string_append_printf(contents,"# Sets what type of terminal attempts to emulate.\n"
 					"# It will also set the TERM environment.\n"
 					"# Unless you are interested in this feature, always use \"xterm\".\n"
 					"emulate_term = %s\n\n", win_data->emulate_term);
+#endif
 	g_string_append_printf(contents,"# The environment 'VTE_CJK_WIDTH' used when initing a vte terminal.\n"
 					"# 0: get via environment; 1: use narrow ideograph; 2: use wide ideograph.\n"
 					"VTE_CJK_WIDTH = %d\n\n", win_data->VTE_CJK_WIDTH);
@@ -2551,7 +2840,7 @@ GString *save_user_settings(GtkWidget *widget, struct Window *win_data)
 					page_color[i].comment_eng, page_color[i].name, win_data->user_page_color[i]);
 	}
 	g_string_append_printf(contents,"\n[key]\n\n");
-	for (i=0; i<KEYS; i++)
+	for (i=0; i<KEYS-FIXED_KEYS; i++)
 	{
 		if (win_data->user_keys[i].value && (win_data->user_keys[i].value[0]!='\0'))
 			g_string_append_printf( contents,"%s\n# Left it blank to disable this function key.\n%s = %s\n\n",
@@ -2583,7 +2872,7 @@ GString *save_user_settings(GtkWidget *widget, struct Window *win_data)
 	else
 		g_string_append(contents, "inactive_brightness = \n\n");
 
-	gchar *color_str;
+#ifdef ENABLE_GDKCOLOR_TO_STRING
 	for (i=1; i<COLOR-1; i++)
 	{
 		g_string_append_printf( contents,"%s\n"
@@ -2591,15 +2880,15 @@ GString *save_user_settings(GtkWidget *widget, struct Window *win_data)
 
 		if (compare_color(&(win_data->custom_color_theme[win_data->color_theme_index].color[i]),
 			  &(system_color_theme[win_data->color_theme_index].color[i])))
-		{    
-			color_str = gdk_color_to_string(&(win_data->custom_color_theme[win_data->color_theme_index].color[i]));
+		{
+			color_str = dirty_gdk_rgba_to_string(&(win_data->custom_color_theme[win_data->color_theme_index].color[i]));
 			g_string_append_printf(contents,"%s = %s\n\n",  color[i].name, color_str);
 			g_free (color_str);
-		}    
-		else 
+		}
+		else
 			g_string_append_printf(contents,"%s = \n\n",  color[i].name);
 	}
-
+#endif
 	g_string_append_printf(contents,"\n");
 
 	g_string_append_printf(contents,"[command]\n\n"
@@ -2609,7 +2898,7 @@ GString *save_user_settings(GtkWidget *widget, struct Window *win_data)
 					"# 0: Open the hyperlink in new tab.\n"
 					"#    Use it if the command were using CLI, like w3m.\n"
 					"# 1: Open the hyperlink with gdk_spawn_on_screen_with_pipes().\n"
-					"#    Use it if the command were using GUI, like firefox.\n"
+					"#    Use it if the command were using GUI, like chromium.\n"
 					"# 2: Open the hyperlink in new window,\n"
 					"#    Use it if you not sure.\n"
 					"#\n"
@@ -2624,6 +2913,18 @@ GString *save_user_settings(GtkWidget *widget, struct Window *win_data)
 					"# You may use \"zh_TW\", \"zh_TW.Big5\", or \"zh_TW.UTF-8\" here.\n"
 					"# Left it blank to use the locale environs from current page.\n\n");
 
+	for (i=0; i<REGEX; i++)
+	{
+		gchar *match_str=convert_escape_sequence_to_string(regex_str[i]);
+		g_string_append_printf( contents,"# Default: %s = %s\n",
+					regex_name[i], match_str);
+		g_free(match_str);
+		if (win_data->user_regex[i])
+			g_string_append_printf( contents,"%s = %s\n\n", regex_name[i], win_data->user_regex[i]);
+		else
+			g_string_append_printf( contents,"%s = \n\n", regex_name[i]);
+	}
+
 	for (i=0; i<COMMAND; i++)
 	{
 		g_string_append_printf( contents,"%s\n%s = %s\n",
@@ -2634,8 +2935,18 @@ GString *save_user_settings(GtkWidget *widget, struct Window *win_data)
 					command[i].VTE_CJK_WIDTH_name, win_data->user_command[i].VTE_CJK_WIDTH);
 		g_string_append_printf( contents,"%s = %s\n",
 					command[i].environ_name, win_data->user_command[i].environ);
-		g_string_append_printf( contents,"%s = %s\n\n",
+		g_string_append_printf( contents,"%s = %s\n",
 					command[i].locale_name, win_data->user_command[i].locale);
+		gchar *match_str=convert_escape_sequence_to_string(command[i].match);
+		g_string_append_printf( contents,"# Default: %s = %s\n",
+					command[i].match_regex_name, match_str);
+		g_free(match_str);
+		if (win_data->user_command[i].match_regex_orig)
+			g_string_append_printf( contents,"%s = %s\n\n",
+						command[i].match_regex_name, win_data->user_command[i].match_regex_orig);
+		else
+			g_string_append_printf( contents,"%s = \n\n",
+						command[i].match_regex_name);
 	}
 
 	// g_debug("menu_active_window = %p", menu_active_window);
@@ -2661,7 +2972,8 @@ GString *save_user_settings(GtkWidget *widget, struct Window *win_data)
 
 	// g_debug("\n%s", contents->str);
 #ifdef BSD
-	gchar *real_file_name = realpath((const gchar *)profile, NULL);
+	gchar resolved_patch[PATH_MAX+1];
+	gchar *real_file_name = g_strdup(realpath((const gchar *)profile, resolved_patch));
 #else
 	gchar *real_file_name = canonicalize_file_name((const gchar *)profile);
 #endif
@@ -2736,7 +3048,7 @@ void create_save_failed_dialog(struct Window *win_data, gchar *message)
 	error_dialog(window,
 		     _("Error when writing profile"),
 		     "Error when writing profile",
-		     GTK_STOCK_DIALOG_ERROR,
+		     GTK_FAKE_STOCK_DIALOG_ERROR,
 		     temp_str[2],
 		     NULL);
 	gint i;
@@ -2885,7 +3197,7 @@ void check_profile_version (GKeyFile *keyfile, struct Window *win_data)
 		error_dialog(window,
 			     _("The format of your profile is out of date"),
 			     "The format of your profile is out of date",
-			     GTK_STOCK_DIALOG_INFO,
+			     GTK_FAKE_STOCK_DIALOG_INFO,
 			     temp_str[2],
 			     NULL);
 		gint i;
@@ -2924,7 +3236,7 @@ void profile_is_invalid_dialog(GError *error, struct Window *win_data)
 	error_dialog(win_data->window,
 		     _("The profile is invalid!"),
 		     "The profile is invalid!",
-		     GTK_STOCK_DIALOG_ERROR,
+		     GTK_FAKE_STOCK_DIALOG_ERROR,
 		     err_msg,
 		     NULL);
 	g_clear_error (&error);
@@ -2975,4 +3287,29 @@ void convert_string_to_user_key(gint i, gchar *value, struct Window *win_data)
 	}
 	// else
 	//	g_debug("We can not find %s key in profile...", pagekeys[i].name);
+}
+
+void get_row_and_column_from_geometry_str(glong *column, glong *row, glong *default_column, glong *default_row, gchar *geometry_str)
+{
+#ifdef DETAIL
+	g_debug("! Launch get_row_and_column_from_geometry_str() with column = %ld, row = %ld, "
+		"default_column = %ld, default_row = %ld, geometry_str = %s",
+		*column, *row, *default_column, *default_row, geometry_str);
+#endif
+#ifdef SAFEMODE
+	if ((column==NULL) || (row==NULL) || (default_column==NULL) || (default_row==NULL)) return;
+#endif
+	if (geometry_str && (geometry_str[0]!='\0'))
+	{
+		gint offset_x = 0, offset_y = 0;
+		guint new_column, new_row;
+		if (XParseGeometry (geometry_str, &offset_x, &offset_y, &new_column, &new_row))
+		{
+			*column = new_column;
+			*row = new_row;
+		}
+	}
+
+	if (*column < 1) *column = *default_column;
+	if (*row < 1) *row = *default_row;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2010 Lu, Chao-Ming (Tetralet).  All rights reserved.
+ * Copyright (c) 2008-2014 Lu, Chao-Ming (Tetralet).  All rights reserved.
  *
  * This file is part of LilyTerm.
  *
@@ -23,7 +23,7 @@
 extern GList *window_list;
 extern GtkWidget *menu_active_window;
 extern struct Page_Color page_color[PAGE_COLOR];
-extern struct Color_Theme system_color_theme[THEME];
+extern struct GdkRGBA_Theme system_color_theme[THEME];
 extern struct Erase_Binding erase_binding[ERASE_BINDING];
 #ifdef ENABLE_CURSOR_SHAPE
 extern struct Cursor_Shape cursor_shape[CURSOR_SHAPE];
@@ -56,10 +56,10 @@ gboolean create_menu(struct Window *win_data)
 	//	enable_vte_cjk_width, g_getenv("VTE_CJK_WIDTH"));
 	win_data->menu = gtk_menu_new();
 
-	win_data->encoding_locale_menuitems[0] = create_sub_item_subitem (_("Change text encoding"), GTK_STOCK_DND);
-	win_data->encoding_locale_menuitems[1] = create_sub_item_subitem (_("New tab"), GTK_STOCK_DND_MULTIPLE);
+	win_data->encoding_locale_menuitems[0] = create_sub_item_subitem (_("Change text encoding"), GTK_FAKE_STOCK_DND);
+	win_data->encoding_locale_menuitems[1] = create_sub_item_subitem (_("New tab"), GTK_FAKE_STOCK_DND_MULTIPLE);
 	win_data->encoding_locale_menuitems[2] = create_sub_item_subitem (_("New tab with specified locale"),
-									  GTK_STOCK_DND_MULTIPLE);
+									  GTK_FAKE_STOCK_DND_MULTIPLE);
 	for (i=0; i<3; i++)
 		gtk_menu_shell_append (GTK_MENU_SHELL (win_data->menu), win_data->encoding_locale_menuitems[i]);
 
@@ -67,7 +67,7 @@ gboolean create_menu(struct Window *win_data)
 
 	if (refresh_locale_and_encoding_list(win_data)==FALSE) return FALSE;
 
-	win_data->menuitem_new_window_from_list = create_sub_item_subitem (_("New window with specified profile"), GTK_STOCK_NEW);
+	win_data->menuitem_new_window_from_list = create_sub_item_subitem (_("New window with specified profile"), GTK_FAKE_STOCK_NEW);
 	// g_debug("Trying to append win_data->menuitem_new_window_from_list(%p) to win_data->menu(%p) for win_data = %p",
 	//	win_data->menuitem_new_window_from_list, win_data->menu, win_data);
 	gtk_menu_shell_append (GTK_MENU_SHELL (win_data->menu), win_data->menuitem_new_window_from_list);
@@ -77,37 +77,42 @@ gboolean create_menu(struct Window *win_data)
 	add_separator_menu (win_data->menu);
 
 	// Change the font for every tab
-	create_menu_item (IMAGE_MENU_ITEM, win_data->menu, _("Change the font"), NULL, GTK_STOCK_SELECT_FONT,
+	create_menu_item (IMAGE_MENU_ITEM, win_data->menu, _("Change the font"), NULL, GTK_FAKE_STOCK_SELECT_FONT,
 			  (GSourceFunc)select_font, win_data);
 
 #ifdef ENABLE_GDKCOLOR_TO_STRING
 	if (win_data->show_color_selection_menu)
 	{
 		// The submenu of Change color
-		sub_menu = create_sub_item (win_data->menu, _("Change colors"), GTK_STOCK_SELECT_COLOR);
-
-		// Change the foreground color for every tab
-		create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Change the foreground color"), NULL, GTK_STOCK_SELECT_COLOR,
-				  (GSourceFunc)dialog, GINT_TO_POINTER (CHANGE_THE_FOREGROUND_COLOR));
-
-		// Change the foreground color for every tab
-		create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Change the ANSI colors"), NULL, GTK_STOCK_SELECT_COLOR,
-				  (GSourceFunc)dialog, GINT_TO_POINTER (CHANGE_THE_ANSI_COLORS));
-
-		// Change the background color for every tab
-		create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Change the background color"), NULL, GTK_STOCK_SELECT_COLOR,
-				  (GSourceFunc)dialog, GINT_TO_POINTER (CHANGE_THE_BACKGROUND_COLOR));
+		sub_menu = create_sub_item (win_data->menu, _("Change colors"), GTK_FAKE_STOCK_SELECT_COLOR);
 
 		// Change the cursor color for every tab
-		create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Change the cursor color"), NULL, GTK_STOCK_SELECT_COLOR,
+		create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Change the cursor color"), NULL, GTK_FAKE_STOCK_SELECT_COLOR,
 				  (GSourceFunc)dialog, GINT_TO_POINTER (CHANGE_THE_CURSOR_COLOR));
 
-		// Change the background color for every tab
-		create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Adjust the brightness of ANSI colors"), NULL, GTK_STOCK_SELECT_COLOR,
-				  (GSourceFunc)dialog, GINT_TO_POINTER (ADJUST_THE_BRIGHTNESS_OF_ANSI_COLORS_USED_IN_TERMINAL));
+		// Change the foreground color for every tab
+		win_data->ansi_theme_menuitem[0] = create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Change the foreground color"),
+								     NULL, GTK_FAKE_STOCK_SELECT_COLOR, (GSourceFunc)dialog,
+								     GINT_TO_POINTER (CHANGE_THE_FOREGROUND_COLOR));
 
-		create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Adjust the brightness when inactive"),  NULL, GTK_STOCK_SELECT_COLOR,
-				  (GSourceFunc)dialog, GINT_TO_POINTER (ADJUST_THE_BRIGHTNESS_OF_ANSI_COLORS_WHEN_INACTIVE));
+		// Change the foreground color for every tab
+		win_data->ansi_theme_menuitem[1] = create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Change the ANSI colors"),
+								     NULL, GTK_FAKE_STOCK_SELECT_COLOR, (GSourceFunc)dialog,
+								     GINT_TO_POINTER (CHANGE_THE_ANSI_COLORS));
+
+		// Change the background color for every tab
+		win_data->ansi_theme_menuitem[2] = create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Change the background color"),
+								     NULL, GTK_FAKE_STOCK_SELECT_COLOR, (GSourceFunc)dialog,
+								     GINT_TO_POINTER (CHANGE_THE_BACKGROUND_COLOR));
+
+		// Change the background color for every tab
+		win_data->ansi_theme_menuitem[3] = create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Adjust the brightness of ANSI colors"),
+								     NULL, GTK_FAKE_STOCK_SELECT_COLOR, (GSourceFunc)dialog,
+								     GINT_TO_POINTER (ADJUST_THE_BRIGHTNESS_OF_ANSI_COLORS_USED_IN_TERMINAL));
+
+		win_data->ansi_theme_menuitem[4] = create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Adjust the brightness when inactive"),
+								     NULL, GTK_FAKE_STOCK_SELECT_COLOR, (GSourceFunc)dialog,
+								     GINT_TO_POINTER (ADJUST_THE_BRIGHTNESS_OF_ANSI_COLORS_WHEN_INACTIVE));
 
 		if (win_data->use_color_page)
 		{
@@ -120,7 +125,7 @@ gboolean create_menu(struct Window *win_data)
 				gchar *label_name = g_strdup_printf(_("Change the %s color on tab"),
 								    page_color[i].comment);
 				if (create_menu_item (IMAGE_MENU_ITEM, sub_menu, label_name,
-						      NULL, GTK_STOCK_SELECT_COLOR, (GSourceFunc)dialog,
+						      NULL, GTK_FAKE_STOCK_SELECT_COLOR, (GSourceFunc)dialog,
 						      GINT_TO_POINTER (CHANGE_THE_TEXT_COLOR_OF_WINDOW_TITLE+i)))
 					hide_separator_menu = FALSE;
 				g_free(label_name);
@@ -130,13 +135,17 @@ gboolean create_menu(struct Window *win_data)
 	}
 #endif
 	// The ansi theme
-	win_data->ansi_color_sub_menu = create_sub_item_subitem (_("Change ANSI color theme"), GTK_STOCK_SELECT_COLOR);
+	win_data->ansi_color_sub_menu = create_sub_item_subitem (_("Change ANSI color theme"), GTK_FAKE_STOCK_SELECT_COLOR);
 	gtk_menu_shell_append (GTK_MENU_SHELL (win_data->menu), win_data->ansi_color_sub_menu);
 	recreate_theme_menu_items(win_data);
 
+#if defined(ENABLE_VTE_BACKGROUND) || defined(FORCE_ENABLE_VTE_BACKGROUND)
 	if (win_data->show_background_menu)
+#else
+	if (win_data->show_background_menu && (win_data->use_rgba == -1))
+#endif
 	{
-		GtkWidget *background_sub_menu = create_sub_item (win_data->menu, _("Background"), GTK_STOCK_PAGE_SETUP);
+		GtkWidget *background_sub_menu = create_sub_item (win_data->menu, _("Background"), GTK_FAKE_STOCK_PAGE_SETUP);
 #ifdef ENABLE_RGBA
 		if (win_data->use_rgba == -1)
 		{
@@ -147,27 +156,29 @@ gboolean create_menu(struct Window *win_data)
 									 win_data->window);
 
 			// Window opacity
-			create_menu_item (IMAGE_MENU_ITEM, background_sub_menu, _("Window opacity"), NULL, GTK_STOCK_EXECUTE,
+			create_menu_item (IMAGE_MENU_ITEM, background_sub_menu, _("Window opacity"), NULL, GTK_FAKE_STOCK_EXECUTE,
 					  (GSourceFunc)dialog, GINT_TO_POINTER (CHANGE_THE_OPACITY_OF_WINDOW));
 
 			create_menu_item (IMAGE_MENU_ITEM, background_sub_menu, _("Window opacity when inactive"),
-					   NULL, GTK_STOCK_EXECUTE, (GSourceFunc)dialog,
+					   NULL, GTK_FAKE_STOCK_EXECUTE, (GSourceFunc)dialog,
 					   GINT_TO_POINTER (CHANGE_THE_OPACITY_OF_WINDOW_WHEN_INACTIVE));
 
 			// ----------------------------------------
 			add_separator_menu (background_sub_menu);
 		}
 #endif
+#if defined(ENABLE_VTE_BACKGROUND) || defined(FORCE_ENABLE_VTE_BACKGROUND)
 		// Transparent Background
 		win_data->menuitem_trans_bg = create_menu_item (CHECK_MENU_ITEM, background_sub_menu, _("Transparent background"), NULL, NULL,
 								(GSourceFunc)set_trans_bg, win_data);
 
-		create_menu_item (IMAGE_MENU_ITEM, background_sub_menu, _("Background saturation"), NULL, GTK_STOCK_EXECUTE,
+		create_menu_item (IMAGE_MENU_ITEM, background_sub_menu, _("Background saturation"), NULL, GTK_FAKE_STOCK_EXECUTE,
 				  (GSourceFunc)dialog, GINT_TO_POINTER (CHANGE_BACKGROUND_SATURATION));
 
 		// Load background from file
-		create_menu_item (IMAGE_MENU_ITEM, background_sub_menu, _("Set background image"), NULL, GTK_STOCK_ABOUT,
+		create_menu_item (IMAGE_MENU_ITEM, background_sub_menu, _("Set background image"), NULL, GTK_FAKE_STOCK_ABOUT,
 								(GSourceFunc)load_background_image_from_file, win_data);
+#endif
 	}
 	// ----------------------------------------
 	add_separator_menu (win_data->menu);
@@ -178,31 +189,31 @@ gboolean create_menu(struct Window *win_data)
 		if (win_data->embedded_copy_paste_menu)
 			clip_sub_menu = win_data->menu;
 		else
-			clip_sub_menu = create_sub_item (win_data->menu, _("Clipboard"), GTK_STOCK_EDIT);
+			clip_sub_menu = create_sub_item (win_data->menu, _("Clipboard"), GTK_FAKE_STOCK_EDIT);
 
 		if (win_data->enable_hyperlink)
 			// copy_url
 			win_data->menuitem_copy_url = create_menu_item (IMAGE_MENU_ITEM, clip_sub_menu, _("Copy URL"), NULL,
-									GTK_STOCK_COPY, (GSourceFunc)copy_url_clipboard,
+									GTK_FAKE_STOCK_COPY, (GSourceFunc)copy_url_clipboard,
 									NULL);
 
 		// copy
-		win_data->menuitem_copy = create_menu_item (IMAGE_MENU_ITEM, clip_sub_menu, _("Copy"), NULL, GTK_STOCK_COPY,
+		win_data->menuitem_copy = create_menu_item (IMAGE_MENU_ITEM, clip_sub_menu, _("Copy"), NULL, GTK_FAKE_STOCK_COPY,
 							    (GSourceFunc)copy_clipboard, win_data);
 
 		// paste
-		win_data->menuitem_paste = create_menu_item (IMAGE_MENU_ITEM, clip_sub_menu, _("Paste"), NULL, GTK_STOCK_PASTE,
+		win_data->menuitem_paste = create_menu_item (IMAGE_MENU_ITEM, clip_sub_menu, _("Paste"), NULL, GTK_FAKE_STOCK_PASTE,
 							     (GSourceFunc)paste_clipboard, win_data);
 
 		// ----------------------------------------
 		add_separator_menu (clip_sub_menu);
 
 		win_data->menuitem_clipboard = create_menu_item (IMAGE_MENU_ITEM, clip_sub_menu,
-								 _("View clipboard"), NULL, GTK_STOCK_FILE,
+								 _("View clipboard"), NULL, GTK_FAKE_STOCK_FILE,
 								 (GSourceFunc)view_clipboard, win_data);
 
 		win_data->menuitem_primary = create_menu_item (IMAGE_MENU_ITEM, clip_sub_menu,
-							       _("View primary clipboard"), NULL, GTK_STOCK_FILE,
+							       _("View primary clipboard"), NULL, GTK_FAKE_STOCK_FILE,
 							       (GSourceFunc)view_primary, win_data);
 
 		// ----------------------------------------
@@ -222,24 +233,31 @@ gboolean create_menu(struct Window *win_data)
 	// g_debug("create_menu(): check_show_or_hide_scroll_bar() = %d", check_show_or_hide_scroll_bar(win_data));
 
 	// clean scrollback lines
-	create_menu_item (IMAGE_MENU_ITEM, win_data->menu, _("Clean scrollback lines"), NULL, GTK_STOCK_CLEAR,
+	create_menu_item (IMAGE_MENU_ITEM, win_data->menu, _("Clean scrollback lines"), NULL, GTK_FAKE_STOCK_CLEAR,
 			  (GSourceFunc)clean_scrollback_lines, win_data);
 
 	// ----------------------------------------
 	add_separator_menu (win_data->menu);
 
-	GtkWidget *misc_sub_menu = create_sub_item (win_data->menu, _("Misc"), GTK_STOCK_CONVERT);
+	GtkWidget *misc_sub_menu = create_sub_item (win_data->menu, _("Misc"), GTK_FAKE_STOCK_CONVERT);
 
-	create_menu_item (IMAGE_MENU_ITEM, misc_sub_menu, _("Paste to every Vte Terminal"), NULL, GTK_STOCK_PASTE,
+	create_menu_item (IMAGE_MENU_ITEM, misc_sub_menu, _("Paste to every Vte Terminal"), NULL, GTK_FAKE_STOCK_PASTE,
 							     (GSourceFunc)paste_to_every_vte, win_data);
 
-	create_menu_item (IMAGE_MENU_ITEM, misc_sub_menu, _("Launch file manager"), NULL, GTK_STOCK_PASTE,
+	create_menu_item (IMAGE_MENU_ITEM, misc_sub_menu, _("Launch file manager"), NULL, GTK_FAKE_STOCK_PASTE,
 							     (GSourceFunc)open_current_dir_with_file_manager, win_data);
 
 	// ----------------------------------------
 	add_separator_menu (misc_sub_menu);
+	create_menu_item (IMAGE_MENU_ITEM, misc_sub_menu, _("View page info"), NULL, GTK_FAKE_STOCK_DIALOG_QUESTION,
+							     (GSourceFunc)view_current_page_info, win_data);
 
-	sub_menu = create_sub_item (misc_sub_menu, _("Erase Binding"), GTK_STOCK_GO_BACK);
+
+
+	// ----------------------------------------
+	add_separator_menu (misc_sub_menu);
+
+	sub_menu = create_sub_item (misc_sub_menu, _("Erase Binding"), GTK_FAKE_STOCK_GO_BACK);
 	GSList *erase_binding_group = NULL;
 	for (i=0; i<ERASE_BINDING; i++)
 	{
@@ -254,7 +272,7 @@ gboolean create_menu(struct Window *win_data)
 	}
 
 #ifdef ENABLE_CURSOR_SHAPE
-	sub_menu = create_sub_item (misc_sub_menu, _("Cursor Shape"), GTK_STOCK_GO_BACK);
+	sub_menu = create_sub_item (misc_sub_menu, _("Cursor Shape"), GTK_FAKE_STOCK_GO_BACK);
 	GSList *cursor_shape_group = NULL;
 	for (i=0; i<CURSOR_SHAPE; i++)
 	{
@@ -270,9 +288,9 @@ gboolean create_menu(struct Window *win_data)
 #endif
 
 	// Dim when inactive
-       	win_data->menuitem_dim_text = create_menu_item (CHECK_MENU_ITEM, misc_sub_menu,
-							_("Dim text when inactive"), NULL, NULL,
-							(GSourceFunc)set_dim_text, win_data);
+	win_data->ansi_theme_menuitem[5] = win_data->menuitem_dim_text = create_menu_item (CHECK_MENU_ITEM, misc_sub_menu,
+											   _("Dim text when inactive"), NULL, NULL,
+											   (GSourceFunc)set_dim_text, win_data);
 #ifdef ENABLE_RGBA
 	if (win_data->use_rgba == -1)
 		win_data->menuitem_dim_window = create_menu_item (CHECK_MENU_ITEM, misc_sub_menu,
@@ -282,7 +300,21 @@ gboolean create_menu(struct Window *win_data)
 
 	// Cursor Blinks
 	win_data->menuitem_cursor_blinks = create_menu_item (CHECK_MENU_ITEM, misc_sub_menu, _("Cursor blinks"), NULL, NULL,
-								(GSourceFunc)set_cursor_blinks, win_data);
+							     (GSourceFunc)set_cursor_blinks, win_data);
+
+	// Bold text
+	win_data->menuitem_allow_bold_text = create_menu_item (CHECK_MENU_ITEM, misc_sub_menu, _("Allow bold text"), NULL, NULL,
+							       (GSourceFunc)set_allow_bold_text, win_data);
+
+	// ----------------------------------------
+	add_separator_menu (misc_sub_menu);
+
+	// Need <Ctrl> pressed to open URL
+	win_data->menuitem_open_url_with_ctrl_pressed = create_menu_item (CHECK_MENU_ITEM, misc_sub_menu, _("Need <Ctrl> pressed to open URL"), NULL, NULL,
+									  (GSourceFunc)set_open_url_with_ctrl_pressed, win_data);
+
+	win_data->menuitem_disable_url_when_ctrl_pressed = create_menu_item (CHECK_MENU_ITEM, misc_sub_menu, _("Disable URL when <Ctrl> pressed"), NULL, NULL,
+									  (GSourceFunc)set_disable_url_when_ctrl_pressed, win_data);
 
 	// ----------------------------------------
 	add_separator_menu (misc_sub_menu);
@@ -290,101 +322,106 @@ gboolean create_menu(struct Window *win_data)
 	// Audible bell
 	win_data->menuitem_audible_bell = create_menu_item (CHECK_MENU_ITEM, misc_sub_menu, _("Audible bell"), NULL, NULL,
 								(GSourceFunc)set_audible_bell, win_data);
-
+#if defined(ENABLE_VISIBLE_BELL) || defined(UNIT_TEST)
 	// Visible bell
 	win_data->menuitem_visible_bell = create_menu_item (CHECK_MENU_ITEM, misc_sub_menu, _("Visible bell"), NULL, NULL,
 								(GSourceFunc)set_visible_bell, win_data);
-
+#endif
+#ifdef ENABLE_BEEP_SINGAL
 	// Urgent bell
 	win_data->menuitem_urgent_bell = create_menu_item (CHECK_MENU_ITEM, misc_sub_menu, _("Urgent bell"), NULL, NULL,
 								(GSourceFunc)set_urgent_bell, win_data);
-
+#endif
 	// ----------------------------------------
 	add_separator_menu (misc_sub_menu);
 
-
+#ifdef ENABLE_IM_APPEND_MENUITEMS
 	// Input Method
 	if (win_data->show_input_method_menu)
 	{
-		sub_menu = create_sub_item (misc_sub_menu, _("Switch input methods"), GTK_STOCK_INDEX);
+		sub_menu = create_sub_item (misc_sub_menu, _("Switch input methods"), GTK_FAKE_STOCK_INDEX);
 		vte_terminal_im_append_menuitems (VTE_TERMINAL(win_data->current_vte), GTK_MENU_SHELL (sub_menu));
 	}
-
+#endif
 	// Edit tab name
 	if (win_data->show_change_page_name_menu)
-		create_menu_item (IMAGE_MENU_ITEM, misc_sub_menu, _("Rename this tab"), NULL, GTK_STOCK_EDIT,
+		create_menu_item (IMAGE_MENU_ITEM, misc_sub_menu, _("Rename this tab"), NULL, GTK_FAKE_STOCK_EDIT,
 			  (GSourceFunc)dialog, GINT_TO_POINTER(EDIT_LABEL));
 
 	// ----------------------------------------
+#ifdef ENABLE_IM_APPEND_MENUITEMS
 	if ((win_data->show_input_method_menu || win_data->show_change_page_name_menu) &&
+#else
+	if (win_data->show_change_page_name_menu &&
+#endif
 	    win_data->show_resize_menu)
 		add_separator_menu (misc_sub_menu);
 
 	// Show the tabs bar
 	win_data->menuitem_show_tabs_bar = create_menu_item (IMAGE_MENU_ITEM, misc_sub_menu, _("Show the tabs bar"), NULL,
-							     GTK_STOCK_GOTO_BOTTOM,
+							     GTK_FAKE_STOCK_GOTO_BOTTOM,
 							     (GSourceFunc)launch_hide_and_show_tabs_bar,
 							     GINT_TO_POINTER(TEMPORARY_ON));
 
 	// Hide the tabs bar
 	win_data->menuitem_hide_tabs_bar = create_menu_item (IMAGE_MENU_ITEM, misc_sub_menu, _("Hide the tabs bar"), NULL,
-							     GTK_STOCK_GOTO_TOP,
+							     GTK_FAKE_STOCK_GOTO_TOP,
 							     (GSourceFunc)launch_hide_and_show_tabs_bar,
 							     GINT_TO_POINTER(TEMPORARY_OFF));
 
 	// Always shows the tabs bar
 	win_data->menuitem_always_show_tabs_bar = create_menu_item (IMAGE_MENU_ITEM, misc_sub_menu,
 								   _("Always show the tabs bar"),
-								   NULL, GTK_STOCK_GOTO_BOTTOM,
+								   NULL, GTK_FAKE_STOCK_GOTO_BOTTOM,
 								   (GSourceFunc)launch_hide_and_show_tabs_bar,
 								   GINT_TO_POINTER(FORCE_ON));
 
 	// Always hide the tabs bar
 	win_data->menuitem_always_hide_tabs_bar = create_menu_item (IMAGE_MENU_ITEM, misc_sub_menu,
 								   _("Always hide the tabs bar"),
-								   NULL, GTK_STOCK_GOTO_TOP,
+								   NULL, GTK_FAKE_STOCK_GOTO_TOP,
 								   (GSourceFunc)launch_hide_and_show_tabs_bar,
 								   GINT_TO_POINTER(FORCE_OFF));
 
-	add_separator_menu (misc_sub_menu);
-
 	if (win_data->show_resize_menu)
 	{
+		add_separator_menu (misc_sub_menu);
+
 		// Window Size
-		create_menu_item (IMAGE_MENU_ITEM, misc_sub_menu, _("Increase window size"), NULL, GTK_STOCK_ZOOM_IN,
+		create_menu_item (IMAGE_MENU_ITEM, misc_sub_menu, _("Increase window size"), NULL, GTK_FAKE_STOCK_ZOOM_IN,
 				  (GSourceFunc)set_vte_font, GINT_TO_POINTER(FONT_ZOOM_OUT));
 
-		create_menu_item (IMAGE_MENU_ITEM, misc_sub_menu, _("Decrease window size"), NULL, GTK_STOCK_ZOOM_OUT,
+		create_menu_item (IMAGE_MENU_ITEM, misc_sub_menu, _("Decrease window size"), NULL, GTK_FAKE_STOCK_ZOOM_OUT,
 				  (GSourceFunc)set_vte_font, GINT_TO_POINTER(FONT_ZOOM_IN));
 
 		// ----------------------------------------
 		add_separator_menu (misc_sub_menu);
 
 		// Reset font and window size
-		create_menu_item (IMAGE_MENU_ITEM, misc_sub_menu, _("Reset to user custom font/size"), NULL, GTK_STOCK_ZOOM_100,
+		create_menu_item (IMAGE_MENU_ITEM, misc_sub_menu, _("Reset to user custom font/size"), NULL, GTK_FAKE_STOCK_ZOOM_100,
 				  (GSourceFunc)set_vte_font, GINT_TO_POINTER(FONT_RESET_DEFAULT));
 
-		create_menu_item (IMAGE_MENU_ITEM, misc_sub_menu, _("Reset to system font/size"), NULL, GTK_STOCK_ZOOM_100,
+		create_menu_item (IMAGE_MENU_ITEM, misc_sub_menu, _("Reset to system font/size"), NULL, GTK_FAKE_STOCK_ZOOM_100,
 				  (GSourceFunc)set_vte_font, GINT_TO_POINTER(FONT_RESET_SYSTEM));
 	}
 
 	// Reset
-	create_menu_item (IMAGE_MENU_ITEM, win_data->menu, _("Reset the content"), NULL, GTK_STOCK_REFRESH,
+	create_menu_item (IMAGE_MENU_ITEM, win_data->menu, _("Reset the content"), NULL, GTK_FAKE_STOCK_REFRESH,
 			  (GSourceFunc)reset_vte, win_data);
 
 	// ----------------------------------------
 	add_separator_menu (win_data->menu);
 
 	// Usage
-	create_menu_item (IMAGE_MENU_ITEM, win_data->menu, _("Usage"), NULL, GTK_STOCK_HELP,
+	create_menu_item (IMAGE_MENU_ITEM, win_data->menu, _("Usage"), NULL, GTK_FAKE_STOCK_HELP,
 				  (GSourceFunc)dialog, GINT_TO_POINTER(USAGE_MESSAGE));
 
 	// Get the key value for using in profile
-	create_menu_item (IMAGE_MENU_ITEM, win_data->menu, _("Set key binding"), NULL, GTK_STOCK_PREFERENCES,
+	create_menu_item (IMAGE_MENU_ITEM, win_data->menu, _("Set key binding"), NULL, GTK_FAKE_STOCK_PREFERENCES,
 				  (GSourceFunc)dialog, GINT_TO_POINTER(SET_KEY_BINDING));
 
 
-	win_data->menuitem_load_profile_from_list = create_sub_item_subitem (_("User profile"), GTK_STOCK_PROPERTIES);
+	win_data->menuitem_load_profile_from_list = create_sub_item_subitem (_("User profile"), GTK_FAKE_STOCK_PROPERTIES);
 	gtk_menu_shell_append (GTK_MENU_SHELL (win_data->menu), win_data->menuitem_load_profile_from_list);
 	// win_data->subitem_load_profile_from_list = create_sub_item_submenu (win_data->menu, win_data->menuitem_load_profile_from_list);
 	refresh_profile_list(win_data);
@@ -393,7 +430,7 @@ gboolean create_menu(struct Window *win_data)
 	{
 		// Exit LilyTerm
 		gchar *exit_str = g_strdup_printf(_("Quit %s"), PACKAGE);
-		create_menu_item (IMAGE_MENU_ITEM, win_data->menu, exit_str, NULL, GTK_STOCK_QUIT,
+		create_menu_item (IMAGE_MENU_ITEM, win_data->menu, exit_str, NULL, GTK_FAKE_STOCK_QUIT,
 				  (GSourceFunc)main_quit, win_data);
 		g_free(exit_str);
 	}
@@ -429,9 +466,10 @@ void recreate_theme_menu_items(struct Window *win_data)
 	if (win_data->ansi_color_sub_menu)
 #endif
 		gtk_menu_item_set_submenu (GTK_MENU_ITEM (win_data->ansi_color_sub_menu), win_data->ansi_color_menuitem);
-	
-	win_data->menuitem_invert_color = create_menu_item(CHECK_MENU_ITEM, win_data->ansi_color_menuitem, _("Invert color"), NULL, NULL,
-							    (GSourceFunc)invert_color_theme, win_data);
+
+	win_data->ansi_theme_menuitem[6] = win_data->menuitem_invert_color = create_menu_item(CHECK_MENU_ITEM, win_data->ansi_color_menuitem,
+											      _("Invert color"), NULL, NULL,
+											      (GSourceFunc)invert_color_theme, win_data);
 	add_separator_menu (win_data->ansi_color_menuitem);
 
 	gint i;
@@ -460,27 +498,25 @@ GSList *create_theme_menu_items(struct Window *win_data, GtkWidget *sub_menu, GS
 	gchar *item_label = NULL;
 	switch (current_theme)
 	{
-		case 0:
-			// TRANSLATE NOTE: Please translate the "System default (SCHEME)" into "System default" (in your language).
-			// TRANSLATE NOTE: Some language will have trouble if here is "System default" only.
-			// TRANSLATE NOTE: Contrast it with "System default (PROFILE)" (See below)
-			if (compare_strings("System default (SCHEME)", _("System default (SCHEME)"), TRUE))
-				item_label = _("System default (SCHEME)");
-			else
-				item_label = "System default";
+		case THEME-2:
+			item_label = _("grayscale");
 			break;
 		case THEME-1:
-			item_label = _("grayscale");
+			item_label = _("(build-in)");
 			break;
 		default:
 			item_label = system_color_theme[current_theme].name;
 	}
 
-	if (custom_theme) item_label = g_strdup_printf(_("%s + custom"), item_label);
-
 	gint index = system_color_theme[current_theme].index;
 	if (custom_theme)
 		index = win_data->custom_color_theme[current_theme].index;
+
+	// don't create 256/true colors + custom
+	if (index == (2*THEME-1)) return theme_group;
+
+	if (custom_theme) item_label = g_strdup_printf(_("%s + custom"), item_label);
+
 	win_data->menuitem_theme[current_theme + custom_theme*THEME] = add_radio_menuitem_to_sub_menu (theme_group,
 												       sub_menu,
 												       item_label,
@@ -535,10 +571,11 @@ void copy_url_clipboard(GtkWidget *widget, gpointer user_data)
 #ifdef SAFEMODE
 	if (widget==NULL) return;
 #endif
-	if (gtk_widget_get_name(widget))
+	const gchar *widget_name = gtk_widget_get_name(widget);
+	if (widget_name)
 	{
 		extern GtkClipboard *selection_clipboard;
-		gtk_clipboard_set_text(selection_clipboard, gtk_widget_get_name(widget), -1);
+		gtk_clipboard_set_text(selection_clipboard, widget_name, -1);
 	}
 }
 
@@ -598,6 +635,33 @@ void open_current_dir_with_file_manager(GtkWidget *widget, struct Window *win_da
 	open_url_with_external_command (page_data->pwd, TAG_FILE, win_data, page_data);
 }
 
+void view_current_page_info(GtkWidget *widget, struct Window *win_data)
+{
+#ifdef DETAIL
+	g_debug("! Launch view_current_page_info() with win_data = %p!", win_data);
+#endif
+#ifdef SAFEMODE
+	if ((win_data==NULL) || (win_data->current_vte==NULL)) return;
+#endif
+	struct Page *page_data = (struct Page *)g_object_get_data(G_OBJECT(win_data->current_vte), "Page_Data");
+#ifdef SAFEMODE
+	if (page_data==NULL) return;
+#endif
+	gchar *old_temp_data = win_data->temp_data;
+	win_data->temp_data = g_strdup_printf("%s\x10%s\x10"
+					      "Encoding=%s\n"
+					      "VTE_CJK_WIDTH=%s\n"
+					      "WINDOWID=%ld",
+					      _("View current page information"), "View current page information",
+					      page_data->encoding_str,
+					      page_data->VTE_CJK_WIDTH_STR,
+					      (gtk_widget_get_window (page_data->vte))?GDK_WINDOW_XID (gtk_widget_get_window (page_data->vte)):0);
+	dialog(NULL, GENERAL_INFO);
+	g_free(win_data->temp_data);
+	win_data->temp_data=old_temp_data;
+
+}
+
 void view_clipboard(GtkWidget *widget, struct Window *win_data)
 {
 #ifdef DETAIL
@@ -606,7 +670,7 @@ void view_clipboard(GtkWidget *widget, struct Window *win_data)
 #ifdef SAFEMODE
 	if (win_data==NULL) return;
 #endif
-	show_clipboard_dialog(SELECTION_CLIPBOARD, win_data, NULL, VIEW_THE_CLIPBOARD);
+	show_clipboard_dialog(SELECTION_CLIPBOARD, win_data, NULL, GENERAL_INFO);
 }
 
 void view_primary(GtkWidget *widget, struct Window *win_data)
@@ -617,7 +681,7 @@ void view_primary(GtkWidget *widget, struct Window *win_data)
 #ifdef SAFEMODE
 	if (win_data==NULL) return;
 #endif
-	show_clipboard_dialog(SELECTION_PRIMARY, win_data, NULL, VIEW_THE_CLIPBOARD);
+	show_clipboard_dialog(SELECTION_PRIMARY, win_data, NULL, GENERAL_INFO);
 }
 
 void set_dim_text(GtkWidget *menuitem_dim_text, struct Window *win_data)
@@ -680,6 +744,53 @@ void set_cursor_blinks(GtkWidget *menuitem_cursor_blinks, struct Window *win_dat
 	}
 }
 
+void set_allow_bold_text(GtkWidget *menuitem_allow_bold_text, struct Window *win_data)
+{
+#ifdef DETAIL
+	g_debug("! Launch set_allow_bold_text() with win_data = %p", win_data);
+#endif
+#ifdef SAFEMODE
+	if ((menuitem_allow_bold_text==NULL) || (win_data==NULL)) return;
+#endif
+	win_data->allow_bold_text = gtk_check_menu_item_get_active (GTK_CHECK_MENU_ITEM(menuitem_allow_bold_text));
+
+	gint i;
+	struct Page *page_data = NULL;
+	for (i=0; i<gtk_notebook_get_n_pages(GTK_NOTEBOOK(win_data->notebook)); i++)
+	{
+		page_data = get_page_data_from_nth_page(win_data, i);
+#ifdef SAFEMODE
+		if (page_data)
+#endif
+			vte_terminal_set_allow_bold(VTE_TERMINAL(page_data->vte), win_data->allow_bold_text);
+	}
+}
+
+void set_open_url_with_ctrl_pressed(GtkWidget *menuitem_open_url_with_ctrl_pressed, struct Window *win_data)
+{
+#ifdef DETAIL
+	g_debug("! Launch set_open_url_with_ctrl_pressed() with win_data = %p", win_data);
+#endif
+#ifdef SAFEMODE
+	if ((menuitem_open_url_with_ctrl_pressed==NULL) || (win_data==NULL)) return;
+#endif
+	win_data->open_url_with_ctrl_pressed = gtk_check_menu_item_get_active (GTK_CHECK_MENU_ITEM(menuitem_open_url_with_ctrl_pressed));
+	if (win_data->open_url_with_ctrl_pressed) win_data->disable_url_when_ctrl_pressed = FALSE;
+}
+
+void set_disable_url_when_ctrl_pressed(GtkWidget *menuitem_disable_url_when_ctrl_pressed, struct Window *win_data)
+{
+#ifdef DETAIL
+	g_debug("! Launch set_disable_url_when_ctrl_pressed() with win_data = %p", win_data);
+#endif
+#ifdef SAFEMODE
+	if ((menuitem_disable_url_when_ctrl_pressed==NULL) || (win_data==NULL)) return;
+#endif
+	win_data->disable_url_when_ctrl_pressed = gtk_check_menu_item_get_active (GTK_CHECK_MENU_ITEM(menuitem_disable_url_when_ctrl_pressed));
+	if (win_data->disable_url_when_ctrl_pressed) win_data->open_url_with_ctrl_pressed = FALSE;
+	// g_debug("set_disable_url_when_ctrl_pressed(): set win_data->disable_url_when_ctrl_pressed = %d", win_data->disable_url_when_ctrl_pressed);
+}
+
 void set_audible_bell(GtkWidget *menuitem_audible_bell, struct Window *win_data)
 {
 #ifdef DETAIL
@@ -703,6 +814,7 @@ void set_audible_bell(GtkWidget *menuitem_audible_bell, struct Window *win_data)
 	}
 }
 
+#if defined(ENABLE_VISIBLE_BELL) || defined(UNIT_TEST)
 void set_visible_bell(GtkWidget *menuitem_visible_bell, struct Window *win_data)
 {
 #ifdef DETAIL
@@ -725,7 +837,9 @@ void set_visible_bell(GtkWidget *menuitem_visible_bell, struct Window *win_data)
 			vte_terminal_set_visible_bell (VTE_TERMINAL(page_data->vte), win_data->visible_bell);
 	}
 }
+#endif
 
+#if defined(ENABLE_BEEP_SINGAL) || defined(UNIT_TEST)
 void set_urgent_bell(GtkWidget *menuitem_urgent_bell, struct Window *win_data)
 {
 #ifdef DETAIL
@@ -826,6 +940,7 @@ gboolean stop_urgency_hint(GtkWidget *window, GdkEvent *event, struct Window *wi
 
 	return FALSE;
 }
+#endif
 
 void launch_hide_and_show_tabs_bar(GtkWidget *widget, Switch_Type show_tabs_bar)
 {
@@ -987,7 +1102,7 @@ gint add_menuitem_to_locale_sub_menu(struct Window *win_data,
 		gtk_widget_set_name(menu_item, name);
 		// g_debug("Set the %d locale to %s", no, item_name);
 		gtk_image_menu_item_set_image(GTK_IMAGE_MENU_ITEM(menu_item),
-					      gtk_image_new_from_stock(GTK_STOCK_DND_MULTIPLE, GTK_ICON_SIZE_MENU));
+					      gtk_image_new_from_stock(GTK_FAKE_STOCK_DND_MULTIPLE, GTK_ICON_SIZE_MENU));
 #ifdef SAFEMODE
 		if (win_data->locale_sub_menu)
 #endif
@@ -1037,15 +1152,15 @@ void reset_vte(GtkWidget *widget, struct Window *win_data)
 #endif
 	vte_terminal_reset(VTE_TERMINAL(win_data->current_vte), TRUE, FALSE);
 }
-
+#if defined(ENABLE_VTE_BACKGROUND) || defined(FORCE_ENABLE_VTE_BACKGROUND) || defined(UNIT_TEST)
 void set_trans_bg(GtkWidget *menuitem_trans_bg, struct Window *win_data)
 {
-#ifdef DETAIL
+#  ifdef DETAIL
 	g_debug("! Launch set_trans_bg() for win_data %p", win_data);
-#endif
-#ifdef SAFEMODE
+#  endif
+#  ifdef SAFEMODE
 	if ((menuitem_trans_bg==NULL) || (win_data==NULL)) return;
-#endif
+#  endif
 	// win_data->transparent_background = GTK_CHECK_MENU_ITEM(menuitem_trans_bg)->active;
 	win_data->transparent_background = gtk_check_menu_item_get_active (GTK_CHECK_MENU_ITEM(menuitem_trans_bg));
 
@@ -1055,13 +1170,13 @@ void set_trans_bg(GtkWidget *menuitem_trans_bg, struct Window *win_data)
 	for (i=0; i<gtk_notebook_get_n_pages(GTK_NOTEBOOK(win_data->notebook)); i++)
 	{
 		page_data = get_page_data_from_nth_page(win_data, i);
-#ifdef SAFEMODE
+#  ifdef SAFEMODE
 		if (page_data)
-#endif
+#  endif
 			set_background_saturation (NULL, 0, win_data->background_saturation, page_data->vte);
 	}
 }
-
+#endif
 
 #ifdef ENABLE_RGBA
 void set_trans_win(GtkWidget *widget, GtkWidget *window)
@@ -1094,9 +1209,9 @@ void invert_color_theme(GtkWidget *menuitem, struct Window *win_data)
 #endif
 	if (win_data->checking_menu_item) return;
 
-        win_data->color_brightness = - win_data->color_brightness;
-        win_data->color_brightness_inactive = - win_data->color_brightness_inactive;
-	// g_debug("invert_color_theme(): win_data->color_brightness = %0.3f, win_data->color_brightness_inactive = %0.3f",                            
+	win_data->color_brightness = - win_data->color_brightness;
+	win_data->color_brightness_inactive = - win_data->color_brightness_inactive;
+	// g_debug("invert_color_theme(): win_data->color_brightness = %0.3f, win_data->color_brightness_inactive = %0.3f",
 	//	win_data->color_brightness, win_data->color_brightness_inactive);
 #ifdef SAFEMODE
 	if (menuitem)
@@ -1124,13 +1239,15 @@ void select_ansi_theme(GtkWidget *menuitem, gint index)
 	if (win_data==NULL) return;
 #endif
 	// g_debug("select_ansi_theme(): win_data->invert_color = %d", win_data->invert_color);
-	if (index < COLOR)
+	if (index < THEME)
 		set_ansi_theme(menuitem, ANSI_THEME_SET_ANSI_THEME, FALSE, win_data->invert_color, index, win_data);
 	else
-		set_ansi_theme(menuitem, ANSI_THEME_SET_ANSI_THEME, TRUE, win_data->invert_color, index - COLOR, win_data);
+		set_ansi_theme(menuitem, ANSI_THEME_SET_ANSI_THEME, TRUE, win_data->invert_color, index - THEME, win_data);
+
+	enable_disable_theme_menus(win_data, (index!=(THEME-1)));
 }
 
-void set_ansi_theme(GtkWidget *menuitem, Set_ANSI_Theme_Type type, gboolean use_custom_theme, gboolean invert_color, 
+void set_ansi_theme(GtkWidget *menuitem, Set_ANSI_Theme_Type type, gboolean use_custom_theme, gboolean invert_color,
 		    gint theme_index, struct Window *win_data)
 {
 #ifdef DETAIL
@@ -1170,7 +1287,8 @@ void set_ansi_theme(GtkWidget *menuitem, Set_ANSI_Theme_Type type, gboolean use_
 #ifdef SAFEMODE
 			if (page_data)
 #endif
-				set_vte_color(page_data->vte, default_vte_theme, win_data->cursor_color, win_data->color, FALSE); 
+				set_vte_color(page_data->vte, default_vte_theme, win_data->custom_cursor_color, win_data->cursor_color,
+					      win_data->color, FALSE, (win_data->color_theme_index==(THEME-1)));
 		}
 
 		if (menuitem != win_data->menuitem_invert_color)
@@ -1189,7 +1307,8 @@ void set_ansi_theme(GtkWidget *menuitem, Set_ANSI_Theme_Type type, gboolean use_
 #ifdef SAFEMODE
 			if (page_data)
 #endif
-				set_vte_color(page_data->vte, default_vte_theme, win_data->cursor_color, win_data->color, FALSE); 
+				set_vte_color(page_data->vte, default_vte_theme, win_data->custom_cursor_color, win_data->cursor_color,
+					      win_data->color, FALSE, (win_data->color_theme_index==(THEME-1)));
 #ifdef SAFEMODE
 		}
 #endif
@@ -1243,7 +1362,7 @@ void set_erase_binding (GtkWidget *menuitem, gint value)
 	win_data->current_menuitem_erase_binding = menuitem;
 }
 
-#ifdef ENABLE_CURSOR_SHAPE
+#if defined(ENABLE_CURSOR_SHAPE) || defined(UNIT_TEST)
 void set_cursor_shape (GtkWidget *menuitem, gint value)
 {
 #ifdef DETAIL
@@ -1324,7 +1443,7 @@ void set_encoding(GtkWidget *menuitem, gpointer user_data)
 				  page_data->custom_page_name, page_data->tab_color,
 				  page_data->is_root, page_data->is_bold,
 				  compare_strings(win_data->runtime_encoding,
-				  		  page_data->encoding_str,
+						  page_data->encoding_str,
 						  FALSE),
 				  page_data->encoding_str, page_data->custom_window_title,
 				  FALSE);
@@ -1432,19 +1551,24 @@ void select_font(GtkWidget *widget, struct Window *win_data)
 #ifdef SAFEMODE
 	if (page_data==NULL) return;
 #endif
-	GtkWidget *dialog = gtk_font_selection_dialog_new(_("Font Selection"));
+	GtkWidget *dialog = gtk_font_chooser_dialog_new(_("Font Selection"), GTK_WINDOW(win_data->window));
 	gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(win_data->window));
+	gtk_window_set_destroy_with_parent (GTK_WINDOW (dialog), TRUE);
 	// set the default font name in gtk_font_selection_dialog
 #ifdef SAFEMODE
 	if (page_data->font_name)
 #endif
-		gtk_font_selection_dialog_set_font_name(GTK_FONT_SELECTION_DIALOG(dialog), page_data->font_name);
-	if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_OK)
+		gtk_font_chooser_set_font(GTK_FONT_CHOOSER(dialog), page_data->font_name);
+	if (gtk_dialog_run(GTK_DIALOG(dialog))==GTK_RESPONSE_OK)
 	{
 		// g_debug("Trying to change font name!");
 		g_free(page_data->font_name);
-		page_data->font_name = gtk_font_selection_dialog_get_font_name(GTK_FONT_SELECTION_DIALOG(dialog));
+		page_data->font_name = gtk_font_chooser_get_font(GTK_FONT_CHOOSER(dialog));
+#ifdef USE_GTK2_GEOMETRY_METHOD
 		set_vte_font(NULL, FONT_SET_TO_SELECTED);
+#else
+		g_idle_add((GSourceFunc)idle_set_vte_font_to_selected, win_data);
+#endif
 	}
 	gtk_widget_destroy(dialog);
 }
@@ -1608,7 +1732,7 @@ gboolean refresh_locale_and_encoding_list(struct Window *win_data)
 			// g_debug("Checking (%d) %s...", i, supported_encodings[i]);
 			if (supported_encodings[i] &&
 			     !(check_name_in_menuitem(win_data->encoding_sub_menu,
-			     			      supported_encodings[i],
+						      supported_encodings[i],
 						      FALSE)))
 			{
 				menu_item = add_radio_menuitem_to_sub_menu (encoding_group,
@@ -1731,14 +1855,14 @@ gboolean refresh_locale_and_encoding_list(struct Window *win_data)
 				add_separator_menu (win_data->encoding_sub_menu);
 
 			create_menu_item (IMAGE_MENU_ITEM, win_data->encoding_sub_menu, _("Add other locales..."),
-					  NULL, GTK_STOCK_ADD,  (GSourceFunc)dialog, GINT_TO_POINTER (ADD_NEW_LOCALES));
+					  NULL, GTK_FAKE_STOCK_ADD,  (GSourceFunc)dialog, GINT_TO_POINTER (ADD_NEW_LOCALES));
 		}
 
 		if (count_locale_menu)
 			add_separator_menu (win_data->locale_sub_menu);
 
 		create_menu_item (IMAGE_MENU_ITEM, win_data->locale_sub_menu, _("Add other locales..."),
-				  NULL, GTK_STOCK_ADD,  (GSourceFunc)dialog, GINT_TO_POINTER (ADD_NEW_LOCALES));
+				  NULL, GTK_FAKE_STOCK_ADD,  (GSourceFunc)dialog, GINT_TO_POINTER (ADD_NEW_LOCALES));
 	}
 	for (i=0; i<3; i++)
 #ifdef SAFEMODE
@@ -1773,7 +1897,7 @@ void refresh_profile_list (struct Window *win_data)
 		//	win_data->subitem_load_profile_from_list);
 		win_data->subitem_new_window_from_list =
 			recreate_profile_menu_item(win_data->menuitem_new_window_from_list,
-				   		   win_data->subitem_new_window_from_list,
+						   win_data->subitem_new_window_from_list,
 						   win_data, NEW_WINDOW_FROM_PROFILE);
 		win_data->subitem_load_profile_from_list =
 			recreate_profile_menu_item(win_data->menuitem_load_profile_from_list,
@@ -1804,9 +1928,9 @@ GtkWidget *recreate_profile_menu_item(GtkWidget *menuitem, GtkWidget *subitem,
 	gtk_menu_item_set_submenu (GTK_MENU_ITEM (menuitem), subitem);
 
 	if (type == NEW_WINDOW_FROM_PROFILE)
-		create_new_window_from_menu_items(subitem, GTK_STOCK_NEW);
+		create_new_window_from_menu_items(subitem, GTK_FAKE_STOCK_NEW);
 	else
-		create_load_profile_from_menu_items(subitem, GTK_STOCK_APPLY, win_data);
+		create_load_profile_from_menu_items(subitem, GTK_FAKE_STOCK_APPLY, win_data);
 	// g_debug("SHOW ALL: %p", subitem);
 	gtk_widget_show_all(subitem);
 	return subitem;
@@ -1821,7 +1945,7 @@ void create_new_window_from_menu_items(GtkWidget *sub_menu, const gchar *stock_i
 	if (create_profile_menu_list(sub_menu, stock_id, (GSourceFunc)apply_profile_from_menu_item,
 				     GINT_TO_POINTER(NEW_WINDOW_FROM_PROFILE)))
 		add_separator_menu (sub_menu);
-	create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Other settings..."), NULL, GTK_STOCK_ADD,
+	create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Other settings..."), NULL, GTK_FAKE_STOCK_ADD,
 			  (GSourceFunc)apply_profile_from_file_dialog, GINT_TO_POINTER(NEW_WINDOW_FROM_PROFILE));
 }
 
@@ -1841,16 +1965,16 @@ void create_load_profile_from_menu_items(GtkWidget *sub_menu, const gchar *stock
 
 	add_separator_menu (sub_menu);
 
-	create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Save settings"), NULL, GTK_STOCK_SAVE,
+	create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Save settings"), NULL, GTK_FAKE_STOCK_SAVE,
 			  (GSourceFunc)save_user_settings, win_data);
 
-	create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Save settings as..."), NULL, GTK_STOCK_SAVE_AS,
+	create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Save settings as..."), NULL, GTK_FAKE_STOCK_SAVE_AS,
 			  (GSourceFunc)save_user_settings_as, win_data);
 
 	add_separator_menu (sub_menu);
 
 	// Reload Settings
-	create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Reload settings"), NULL, GTK_STOCK_REVERT_TO_SAVED,
+	create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Reload settings"), NULL, GTK_FAKE_STOCK_REVERT_TO_SAVED,
 			  (GSourceFunc)reload_settings, win_data);
 
 //	gchar *menu_label = g_strdup_printf(_("Apply to every %s window"), PACKAGE);
@@ -1858,7 +1982,7 @@ void create_load_profile_from_menu_items(GtkWidget *sub_menu, const gchar *stock
 //	if (menu_label)
 //	{
 //#endif
-//		create_menu_item (IMAGE_MENU_ITEM, sub_menu, menu_label, NULL, GTK_STOCK_REFRESH,
+//		create_menu_item (IMAGE_MENU_ITEM, sub_menu, menu_label, NULL, GTK_FAKE_STOCK_REFRESH,
 //				  (GSourceFunc)apply_to_every_window, win_data);
 //#ifdef SAFEMODE
 //	}
@@ -1867,11 +1991,11 @@ void create_load_profile_from_menu_items(GtkWidget *sub_menu, const gchar *stock
 
 	add_separator_menu(sub_menu);
 
-	if (create_profile_menu_list(sub_menu, GTK_STOCK_APPLY,
+	if (create_profile_menu_list(sub_menu, GTK_FAKE_STOCK_APPLY,
 				 (GSourceFunc)apply_profile_from_menu_item, GINT_TO_POINTER(LOAD_FROM_PROFILE)))
 		add_separator_menu (sub_menu);
 
-	create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Other settings..."), NULL, GTK_STOCK_ADD,
+	create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("Other settings..."), NULL, GTK_FAKE_STOCK_ADD,
 			  (GSourceFunc)apply_profile_from_file_dialog, GINT_TO_POINTER(LOAD_FROM_PROFILE));
 }
 
@@ -1907,15 +2031,8 @@ gboolean create_profile_menu_list(GtkWidget *sub_menu, const gchar *stock_id, GS
 
 	if (g_file_test(SYS_PROFILE, G_FILE_TEST_EXISTS))
 	{
-		// TRANSLATE NOTE: Please translate the "System default (PROFILE)" into "System default" (in your language).
-		// TRANSLATE NOTE: Some language will have trouble if here is "System default" only.
-		// TRANSLATE NOTE: Contrast it with "System default (SCHEME)" (See above).
-		if (compare_strings("System default (PROFILE)", _("System default (PROFILE)"), TRUE))
-			create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("System default (PROFILE)"),
-					  SYS_PROFILE, stock_id, (GSourceFunc)func, system_func_data);
-		else
-			create_menu_item (IMAGE_MENU_ITEM, sub_menu, "System default",
-					  SYS_PROFILE, stock_id, (GSourceFunc)func, system_func_data);
+		create_menu_item (IMAGE_MENU_ITEM, sub_menu, _("System default"),
+				  SYS_PROFILE, stock_id, (GSourceFunc)func, system_func_data);
 		create_separator = TRUE;
 	}
 	if (create_separator) add_separator_menu(sub_menu);
@@ -1979,11 +2096,11 @@ void apply_profile_from_file_dialog(GtkWidget *menu_item, Apply_Profile_Type typ
 	GtkWidget *dialog;
 
 	if (win_data->use_custom_profile)
-		dialog = create_load_file_dialog(GTK_FILE_CHOOSER_ACTION_OPEN, win_data->window, GTK_STOCK_OPEN, win_data->profile);
+		dialog = create_load_file_dialog(GTK_FILE_CHOOSER_ACTION_OPEN, win_data->window, GTK_FAKE_STOCK_OPEN, win_data->profile);
 	else
 	{
 		gchar *profile = get_profile();
-		dialog = create_load_file_dialog(GTK_FILE_CHOOSER_ACTION_OPEN, win_data->window, GTK_STOCK_OPEN, profile);
+		dialog = create_load_file_dialog(GTK_FILE_CHOOSER_ACTION_OPEN, win_data->window, GTK_FAKE_STOCK_OPEN, profile);
 		g_free(profile);
 	}
 
@@ -2086,6 +2203,7 @@ void apply_profile_from_file(const gchar *path, Apply_Profile_Type type)
 		// Switch the data in win_data_backup and win_data.
 		// The win_data will become {0}, and win_data_backup will stores the old datas from win_data
 		memcpy(win_data_backup, win_data, sizeof(* win_data));
+		// g_debug("apply_profile_from_file(): Append win_data(%p) to window_list!", win_data_backup);
 		window_list = g_list_append (window_list, win_data_backup);
 		memset(win_data, 0, sizeof(* win_data));
 
@@ -2144,12 +2262,19 @@ void apply_profile_from_file(const gchar *path, Apply_Profile_Type type)
 		win_data->init_dir = g_strdup(win_data_backup->init_dir);
 		win_data->environment = g_strdup(win_data_backup->environment);
 		win_data->login_shell = win_data_backup->login_shell;
+		win_data->utmp = win_data_backup->utmp;
 		win_data->custom_window_title_str = g_strdup(win_data_backup->custom_window_title_str);
 		win_data->custom_tab_names_str = NULL;
 		win_data->custom_tab_names_strs = NULL;
 		win_data->window_title_tpgid = win_data_backup->window_title_tpgid;
-		// win_data->update_hints will setted to 1 in apply_font_to_every_vte()
-		// win_data->update_hints = win_data_backup->update_hints;
+		// win_data->hints_type will setted to 1 in apply_font_to_every_vte()
+		// win_data->hints_type = win_data_backup->hints_type;
+		// win_data->resize_type = win_data_backup->resize_type;
+#ifdef USE_GTK3_GEOMETRY_METHOD
+		win_data->resize_type = GEOMETRY_CUSTOM;
+#endif
+		// win_data->geometry_width = win_data_backup->geometry_width;
+		// win_data->geometry_height = win_data_backup->geometry_height;
 		// win_data->keep_vte_size = win_data_backup->keep_vte_size;
 		if (win_data->page_names && win_data_backup->page_names &&
 		    (! compare_strings (win_data->page_names, win_data_backup->page_names, TRUE)) &&
@@ -2163,12 +2288,21 @@ void apply_profile_from_file(const gchar *path, Apply_Profile_Type type)
 		if (win_data->tabs_bar_position)
 			gtk_notebook_set_tab_pos(GTK_NOTEBOOK(win_data->notebook), GTK_POS_BOTTOM);
 		win_data->profile_dir_modtime = -1;
+
+#ifdef USE_GTK3_GEOMETRY_METHOD
+		// g_debug("win_data_backup->window_status = %d", win_data_backup->window_status);
+		if (win_data->window_status == WINDOW_NORMAL) win_data->window_status = WINDOW_APPLY_PROFILE_NORMAL;
+		if (win_data->window_status == WINDOW_START_WITH_FULL_SCREEN) win_data->window_status = WINDOW_APPLY_PROFILE_FULL_SCREEN;
+#endif
+
 		create_menu(win_data);
 
+#ifdef USE_GTK2_GEOMETRY_METHOD
 		win_data->fullscreen = win_data_backup->fullscreen;
 		win_data->true_fullscreen = win_data_backup->true_fullscreen;
-		// g_debug("Got win_data->show_tabs_bar = %d", win_data->show_tabs_bar);
-		hide_and_show_tabs_bar(win_data , win_data->show_tabs_bar);
+#endif
+		// g_debug("apply_profile_from_file(): Got win_data->show_tabs_bar = %d", win_data->show_tabs_bar);
+		hide_and_show_tabs_bar(win_data, win_data->show_tabs_bar);
 		// g_debug("win_data_backup->fullscreen_show_scroll_bar = %d", win_data_backup->fullscreen_show_scroll_bar);
 		// win_data->fullscreen_show_scroll_bar = win_data_backup->fullscreen_show_scroll_bar;
 
@@ -2178,12 +2312,51 @@ void apply_profile_from_file(const gchar *path, Apply_Profile_Type type)
 		// g_debug("apply_profile_from_file(): check_show_or_hide_scroll_bar() = %d",
 		//	check_show_or_hide_scroll_bar(win_data));
 
-		// g_debug("win_data_backup->unfullscreen = %d", win_data_backup->unfullscreen);
-		win_data->unfullscreen = win_data_backup->unfullscreen;
+#ifdef USE_GTK2_GEOMETRY_METHOD
+		// g_debug("win_data_backup->window_status = %d", win_data_backup->window_status);
+		win_data->window_status = win_data_backup->window_status;
 		// g_debug("win_data->startup_fullscreen = %d, win_data_backup->startup_fullscreen = %d",
 		//	win_data->startup_fullscreen, win_data_backup->startup_fullscreen);
 		if (win_data->startup_fullscreen != win_data_backup->startup_fullscreen)
 			deal_key_press(win_data->window, KEY_FULL_SCREEN, win_data);
+#endif
+#ifdef USE_GTK3_GEOMETRY_METHOD
+		// g_debug("win_data->window_status = %d, win_data_backup->window_status = %d",
+		//	win_data->window_status, win_data_backup->window_status);
+		switch (win_data->window_status)
+		{
+			case WINDOW_APPLY_PROFILE_NORMAL:
+				switch (win_data_backup->window_status)
+				{
+					case WINDOW_MAX_WINDOW:
+						deal_key_press(win_data->window, KEY_MAX_WINDOW, win_data);
+						break;
+					case WINDOW_MAX_WINDOW_TO_FULL_SCREEN:
+					case WINDOW_FULL_SCREEN:
+						deal_key_press(win_data->window, KEY_FULL_SCREEN, win_data);
+						break;
+					default:
+						break;
+				}
+				win_data->resize_type = GEOMETRY_CUSTOM;
+				keep_gtk3_window_size(win_data, FALSE);
+				break;
+			case WINDOW_APPLY_PROFILE_FULL_SCREEN:
+				switch (win_data_backup->window_status)
+				{
+					case WINDOW_NORMAL:
+					case WINDOW_MAX_WINDOW_TO_FULL_SCREEN:
+					case WINDOW_MAX_WINDOW:
+						deal_key_press(win_data->window, KEY_FULL_SCREEN, win_data);
+						break;
+					default:
+						break;
+				}
+				break;
+			default:
+				break;
+		}
+#endif
 #ifdef SAFEMODE
 		if (win_data->default_locale && (win_data->default_locale[0] != '\0') &&
 		    compare_strings(win_data->default_locale, win_data_backup->default_locale, TRUE))
@@ -2194,7 +2367,6 @@ void apply_profile_from_file(const gchar *path, Apply_Profile_Type type)
 #endif
 			g_string_append_printf(invild_settings, "\tdefault_locale = %s\n",
 					       win_data->default_locale);
-
 
 		if (compare_strings(win_data->VTE_CJK_WIDTH_STR, win_data_backup->VTE_CJK_WIDTH_STR, FALSE))
 			g_string_append_printf(invild_settings, "\tVTE_CJK_WIDTH = %d\n",
@@ -2226,7 +2398,7 @@ void apply_profile_from_file(const gchar *path, Apply_Profile_Type type)
 			error_dialog(win_data->window,
 				     _("The following settings can NOT be applied"),
 				     "The following settings can NOT be applied",
-				     GTK_STOCK_DIALOG_WARNING,
+				     GTK_FAKE_STOCK_DIALOG_WARNING,
 				     message,
 				     NULL);
 			g_free(color_settings);
@@ -2235,6 +2407,16 @@ void apply_profile_from_file(const gchar *path, Apply_Profile_Type type)
 		g_string_free(invild_settings, TRUE);
 
 		gint i;
+		gboolean refresh_match = FALSE;
+		for (i=0; i<COMMAND; i++)
+		{
+			if (compare_strings (win_data->user_command[i].match_regex, win_data_backup->user_command[i].match_regex, TRUE))
+			{
+				refresh_match = TRUE;
+				break;
+			}
+		}
+
 		struct Page *page_data = NULL;
 		for (i=0; i<gtk_notebook_get_n_pages(GTK_NOTEBOOK(win_data->notebook)); i++)
 		{
@@ -2247,60 +2429,87 @@ void apply_profile_from_file(const gchar *path, Apply_Profile_Type type)
 			// Don't like drag a vte to another lilyterm window,
 			// It will not call page_added()
 			// get_and_update_page_name(page_data, FALSE);
+
+			if (refresh_match) set_hyperlink(win_data, page_data);
 		}
 
 		glong column=0, row=0;
+		get_row_and_column_from_geometry_str(&column, &row, &(win_data->default_column), &(win_data->default_row), win_data->geometry);
 		if (win_data->geometry && (win_data->geometry[0]!='\0'))
 		{
 			// may not work!!
 			gtk_window_parse_geometry(GTK_WINDOW(win_data->window), win_data->geometry);
-
-			gint offset_x = 0, offset_y = 0;
-			guint new_column, new_row;
-			if (XParseGeometry (win_data->geometry, &offset_x, &offset_y, &new_column, &new_row))
-			{
-				column = new_column;
-				row = new_row;
-			}
 		}
-		if (column<1) column = win_data->default_column;
-		if (row<1) row = win_data->default_row;
-#ifdef GEOMETRY
+#ifdef USE_GTK2_GEOMETRY_METHOD
+#  ifdef GEOMETRY
 		g_debug("@ apply_profile_from_file (for %p): Trying set the geometry to %ld x %ld",
 			win_data->window, column, row);
-#endif
+#  endif
 		apply_font_to_every_vte(win_data->window, win_data->default_font_name,
 					column, row);
+#endif
+#ifdef USE_GTK3_GEOMETRY_METHOD
+		win_data->geometry_width = column;
+		win_data->geometry_height = row;
 
+		page_data = (struct Page *)g_object_get_data(G_OBJECT(win_data->current_vte), "Page_Data");
+#  ifdef SAFEMODE
+		if (page_data!=NULL)
+		{
+#  endif
+			g_free(page_data->font_name);
+			page_data->font_name = g_strdup(win_data->default_font_name);
+#  ifdef SAFEMODE
+		}
+#  endif
+		g_idle_add((GSourceFunc)idle_set_vte_font_to_selected, win_data);
+#endif
+		// g_debug("apply_profile_from_file(): Remove win_data(%p) from window_list!", win_data);
 		window_list = g_list_remove (window_list, win_data_backup);
 		clear_win_data(win_data_backup);
 #ifdef SAFEMODE
 		win_data_backup = NULL;
 #endif
 		// gtk_widget_show_all(win_data->window);
+#ifdef USE_GTK3_GEOMETRY_METHOD
+		// g_debug("win_data->window_status = %d, win_data_backup->window_status = %d",
+		//	win_data->window_status, win_data_backup->window_status);
+		switch (win_data->window_status)
+		{
+			case WINDOW_APPLY_PROFILE_NORMAL:
+				win_data->window_status = WINDOW_NORMAL;
+				break;
+			case WINDOW_APPLY_PROFILE_FULL_SCREEN:
+				win_data->window_status = WINDOW_FULL_SCREEN;
+				break;
+			default:
+				break;
+		}
+#endif
 	}
 }
 
+#if defined(ENABLE_VTE_BACKGROUND) || defined(FORCE_ENABLE_VTE_BACKGROUND) || defined(UNIT_TEST)
 void load_background_image_from_file(GtkWidget *widget, struct Window *win_data)
 {
-#ifdef DETAIL
+#  ifdef DETAIL
 	g_debug("! Launch load_background_from_file() with widget = %p, win_data = %p", widget, win_data);
-#endif
-#ifdef SAFEMODE
+#  endif
+#  ifdef SAFEMODE
 	if (win_data==NULL) return;
-#endif
+#  endif
 	gchar *background_image_path = "";
 	if (compare_strings(win_data->background_image, NULL_DEVICE, TRUE))
 		background_image_path = win_data->background_image;
 	GtkWidget *dialog = create_load_file_dialog(GTK_FILE_CHOOSER_ACTION_OPEN, win_data->window,
-						    GTK_STOCK_OPEN, background_image_path);
+						    GTK_FAKE_STOCK_OPEN, background_image_path);
 
 	struct Preview *preview = g_new0(struct Preview, 1);
-#ifdef SAFEMODE
+#  ifdef SAFEMODE
 	if (preview==NULL) return;
-#endif
+#  endif
 
-	preview->vbox = gtk_vbox_new (FALSE, 0);
+	preview->vbox = dirty_gtk_vbox_new (FALSE, 0);
 	preview->image = gtk_image_new();
 	g_signal_connect (dialog, "update-preview", G_CALLBACK (update_preview_image), preview);
 	gtk_box_pack_end (GTK_BOX(preview->vbox), preview->image, FALSE, FALSE, 0);
@@ -2317,7 +2526,7 @@ void load_background_image_from_file(GtkWidget *widget, struct Window *win_data)
 	gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON(preview->scroll_background),
 				      win_data->scroll_background);
 
-	preview->mainbox = gtk_vbox_new (FALSE, 0);
+	preview->mainbox = dirty_gtk_vbox_new (FALSE, 0);
 	gtk_box_pack_start (GTK_BOX(preview->mainbox), preview->frame, FALSE, FALSE, 5);
 	gtk_box_pack_start (GTK_BOX(preview->mainbox), preview->scroll_background, FALSE, FALSE, 0);
 	gtk_file_chooser_set_extra_widget (GTK_FILE_CHOOSER(dialog), preview->mainbox);
@@ -2325,12 +2534,12 @@ void load_background_image_from_file(GtkWidget *widget, struct Window *win_data)
 	preview->default_filename = g_strdup(background_image_path);
 	update_preview_image (GTK_FILE_CHOOSER(dialog), preview);
 	GtkResponseType response;
-#ifdef UNIT_TEST
+#  ifdef UNIT_TEST
 	for (response=GTK_RESPONSE_HELP; response<=GTK_RESPONSE_NONE; response++)
-#else
+#  else
 	response = gtk_dialog_run (GTK_DIALOG (dialog));
 	if (response == GTK_RESPONSE_ACCEPT)
-#endif
+#  endif
 	{
 		// g_debug("gtk_widget_get_mapped(preview->no_image_text) = %d",
 		//	gtk_widget_get_mapped (preview->no_image_text));
@@ -2345,35 +2554,37 @@ void load_background_image_from_file(GtkWidget *widget, struct Window *win_data)
 		win_data->scroll_background = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(preview->scroll_background));
 		gint i;
 		struct Page *page_data = NULL;
-#ifdef SAFEMODE
+#  ifdef SAFEMODE
 		if (win_data->notebook)
 		{
-#endif
+#  endif
 			for (i=0; i<gtk_notebook_get_n_pages(GTK_NOTEBOOK(win_data->notebook)); i++)
 			{
 				page_data = get_page_data_from_nth_page(win_data, i);
-#ifdef SAFEMODE
+#  ifdef SAFEMODE
 				if (page_data)
-#endif
+#  endif
 					set_background_saturation (NULL, 0, win_data->background_saturation,
 								   page_data->vte);
 			}
-#ifdef SAFEMODE
+#  ifdef SAFEMODE
 		}
-#endif
+#  endif
 	}
 	gtk_widget_destroy (dialog);
 	g_free(preview);
 }
+#endif
 
+#if defined(ENABLE_VTE_BACKGROUND) || defined(FORCE_ENABLE_VTE_BACKGROUND) || defined(UNIT_TEST)
 void update_preview_image (GtkFileChooser *dialog, struct Preview *preview)
 {
-#ifdef DETAIL
+#  ifdef DETAIL
 	g_debug("! Launch update_preview_image() with dialog = %p, preview = %p!", dialog, preview);
-#endif
-#ifdef SAFEMODE
+#  endif
+#  ifdef SAFEMODE
 	if ((preview==NULL) || (dialog==NULL)) return;
-#endif
+#  endif
 	gchar *filename = preview->default_filename;
 	if (filename)
 		// filename will be free() later.
@@ -2394,14 +2605,14 @@ void update_preview_image (GtkFileChooser *dialog, struct Preview *preview)
 			// g_debug("Get the current size of vbox is %d x %d",
 			//	preview->vbox->allocation.width, preview->vbox->allocation.height);
 			gint allocation_width;
-#ifdef USE_GTK_ALLOCATION
+#  ifdef USE_GTK_ALLOCATION
 			GtkAllocation allocation;
 			gtk_widget_get_allocation(preview->vbox, &allocation);
 			allocation_width = allocation.width;
 
-#else
+#  else
 			allocation_width = preview->vbox->allocation.width;
-#endif
+#  endif
 			if (width > allocation_width) width = allocation_width;
 
 			GtkRequisition requisition;
@@ -2431,6 +2642,7 @@ void update_preview_image (GtkFileChooser *dialog, struct Preview *preview)
 FINISH:
 	g_free (filename);
 }
+#endif
 
 void reload_settings(GtkWidget *menu_item, struct Window *win_data)
 {
@@ -2483,9 +2695,9 @@ void save_user_settings_as(GtkWidget *widget, struct Window *win_data)
 #endif
 	GtkWidget *dialog;
 	if (win_data->use_custom_profile)
-		dialog = create_load_file_dialog(GTK_FILE_CHOOSER_ACTION_SAVE, win_data->window, GTK_STOCK_SAVE, win_data->profile);
+		dialog = create_load_file_dialog(GTK_FILE_CHOOSER_ACTION_SAVE, win_data->window, GTK_FAKE_STOCK_SAVE, win_data->profile);
 	else
-		dialog = create_load_file_dialog(GTK_FILE_CHOOSER_ACTION_SAVE, win_data->window, GTK_STOCK_SAVE, profile);
+		dialog = create_load_file_dialog(GTK_FILE_CHOOSER_ACTION_SAVE, win_data->window, GTK_FAKE_STOCK_SAVE, profile);
 
 	if (gtk_dialog_run (GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT)
 	{
@@ -2514,13 +2726,13 @@ GtkWidget *create_load_file_dialog(GtkFileChooserAction action, GtkWidget *windo
 						      GTK_WINDOW(window),
 						      action,
 						      button_text, GTK_RESPONSE_ACCEPT,
-						      GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+						      GTK_FAKE_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
 						      NULL);
 	else
 		dialog = gtk_file_chooser_dialog_new (window_title,
 						      GTK_WINDOW(window),
 						      action,
-						      GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+						      GTK_FAKE_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
 						      button_text, GTK_RESPONSE_ACCEPT,
 						      NULL);
 
@@ -2672,7 +2884,7 @@ void print_active_window_is_null_error_dialog(gchar *function)
 #else
 		error_dialog(NULL, _("The following error occurred:"),
 			     "The following error occurred:",
-			     GTK_STOCK_DIALOG_ERROR, err_msg, NULL);
+			     GTK_FAKE_STOCK_DIALOG_ERROR, err_msg, NULL);
 #endif
 	g_free(err_msg);
 }
@@ -2691,7 +2903,28 @@ gboolean check_if_win_data_is_still_alive(struct Window *win_data)
 		if (win_data == win_list->data) return TRUE;
 		win_list = win_list->next;
 	}
-
+#ifdef DEBUG
+	fprintf(stderr, "\033[1;%dm** check_if_win_data_is_still_alive(): win_data (%p) is NOT alive!\033[0m\n",
+		ANSI_COLOR_RED, win_data);
+#endif
 	// g_debug("check_if_win_data_is_still_alive: win_data (%p) is NOT alive!!!", win_data);
 	return FALSE;
+}
+
+void enable_disable_theme_menus(struct Window *win_data, gboolean show)
+{
+#ifdef DETAIL
+	g_debug("! Launch enable_disable_theme_menus() with win_data = %p, show = %d!", win_data, show);
+#endif
+#ifdef SAFEMODE
+	if (win_data==NULL) return;
+#endif
+	gint i;
+	for (i=0; i<ANSI_THEME_MENUITEM; i++)
+	{
+#ifdef SAFEMODE
+		if (win_data->ansi_theme_menuitem[i]==NULL) continue;
+#endif
+		gtk_widget_set_sensitive(win_data->ansi_theme_menuitem[i], show);
+	}
 }

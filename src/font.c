@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2010 Lu, Chao-Ming (Tetralet).  All rights reserved.
+ * Copyright (c) 2008-2014 Lu, Chao-Ming (Tetralet).  All rights reserved.
  *
  * This file is part of LilyTerm.
  *
@@ -321,20 +321,28 @@ void reset_vte_size(GtkWidget *vte, gchar *new_font_name, Font_Reset_Type type)
 			// We need to apply a new font to a single vte.
 			// so that we should insure that this won't change the size of window.
 			// g_debug("Trying to apply font %s to vte", current_font_name);
-			vte_terminal_set_font_from_string_full( VTE_TERMINAL(vte),
+			fake_vte_terminal_set_font_from_string( vte,
 								new_font_name,
 								win_data->font_anti_alias);
-			// g_debug("reset_vte_size(): call window_resizable() with run_once = %d", win_data->update_hints);
+			// g_debug("reset_vte_size(): call window_resizable() with run_once = %d", win_data->hints_type);
 			// g_debug("reset_vte_size(): launch update_window_hint()!");
+#  ifdef GEOMETRY
+			fprintf(stderr, "\033[1;37m!! reset_vte_size(): call update_window_hint()\033[0m\n");
+#  endif
 			update_window_hint(win_data, page_data);
 			break;
 		case RESET_ALL_TO_CURRENT_TAB:
 			// increase/decrease window size & font size for every vte
 			// g_debug("Trying to apply font %s to every vte", current_font_name);
 			// struct Page *page_data = (struct Page *)g_object_get_data(G_OBJECT(current_vte), "Page_Data");
-			apply_font_to_every_vte( page_data->window, new_font_name,
-						 vte_terminal_get_column_count(VTE_TERMINAL(win_data->current_vte)),
-						 vte_terminal_get_row_count(VTE_TERMINAL(win_data->current_vte)));
+#ifdef USE_GTK2_GEOMETRY_METHOD
+			apply_font_to_every_vte(page_data->window, new_font_name,
+						vte_terminal_get_column_count(VTE_TERMINAL(win_data->current_vte)),
+						vte_terminal_get_row_count(VTE_TERMINAL(win_data->current_vte)));
+#endif
+#ifdef USE_GTK3_GEOMETRY_METHOD
+			apply_font_to_every_vte( page_data->window, new_font_name, win_data->geometry_width, win_data->geometry_height);
+#endif
 			break;
 		case RESET_ALL_TO_DEFAULT:
 			// reset window size & font size for every vte
@@ -383,59 +391,56 @@ void apply_font_to_every_vte(GtkWidget *window, gchar *new_font_name, glong colu
 #ifdef SAFEMODE
 		if (page_data==NULL) continue;
 #endif
-#ifdef USE_GTK3_GEOMETRY_METHOD
-		save_current_vte_geometry(win_data, page_data->vte);
-#endif
 		// g_debug("The default font for %d page is: %s (%s)", i, page_data->font_name, new_font_name);
-		vte_terminal_set_font_from_string_full(VTE_TERMINAL(page_data->vte),
-						       new_font_name,
-						       win_data->font_anti_alias);
+		fake_vte_terminal_set_font_from_string( page_data->vte,
+							new_font_name,
+							win_data->font_anti_alias);
 		vte_terminal_set_size(VTE_TERMINAL(page_data->vte), column, row);
-#ifdef USE_GTK3_GEOMETRY_METHOD
-		page_data->column = column;
-		page_data->row = row;
-#  ifdef GEOMETRY
-		g_debug("@ apply_font_to_every_vte (for %p): Trying set the geometry to %ld x %ld",
-			window, column, row);
-#  endif
-#endif
 		g_free(page_data->font_name);
 		page_data->font_name = g_strdup(new_font_name);
-
 		// g_debug("The new font for %d page is: %s (%s)", i, page_data->font_name, new_font_name);
 	}
 
-	// g_debug("Set hints to FALSE!");
-	win_data->update_hints = 1;
+	// g_debug("* Set hints to HINTS_FONT_BASE!, win_data->window_status = %d", win_data->window_status);
+	win_data->hints_type = HINTS_FONT_BASE;
+
 	// win_data->keep_vte_size |= 0x30;
 	// g_debug("window_resizable in apply_font_to_every_vte!");
 	// window_resizable(window, page_data->vte, 2, 1);
 	// g_debug("apply_font_to_every_vte(): launch keep_window_size()!");
-#ifdef USE_GTK2_GEOMETRY_METHOD
-#  ifdef GEOMETRY
-	g_debug("@ apply_font_to_every_vte(): Call keep_gtk2_window_size() with win_data->unfullscreen = %d",
-		win_data->unfullscreen);
-#  endif
+
 	// Don't need to call keep_gtk2_window_size() when fullscreen
-	switch (win_data->unfullscreen)
+	switch (win_data->window_status)
 	{
-		case 0:
-		case 2:
+#ifdef USE_GTK2_GEOMETRY_METHOD
+		case FULLSCREEN_NORMAL:
+		case FULLSCREEN_UNFS_OK:
 #  ifdef GEOMETRY
 			g_debug("@ apply_font_to_every_vte(): Call keep_gtk2_window_size() with keep_vte_size = %x",
 				win_data->keep_vte_size);
 #  endif
 			keep_gtk2_window_size (win_data, page_data->vte, 0x380);
-			break;
-	}
 #endif
 #ifdef USE_GTK3_GEOMETRY_METHOD
-	win_data->keep_vte_size += 2;
+		case WINDOW_NORMAL:
+		case WINDOW_APPLY_PROFILE_NORMAL:
 #  ifdef GEOMETRY
-	g_debug("@ apply_font_to_every_vte(for %p): Set win_data->keep_vte_size to %d",
-		win_data->window, win_data->keep_vte_size);
+			fprintf(stderr, "\033[1;%dm!! apply_font_to_every_vte(win_data %p): Calling keep_gtk3_window_size() with hints_type = %d\n",
+				ANSI_COLOR_MAGENTA, win_data, win_data->hints_type);
 #  endif
+			window_resizable(win_data->window, win_data->current_vte, win_data->hints_type);
+			if (win_data->window_status==WINDOW_NORMAL)
+				win_data->resize_type = GEOMETRY_AUTOMATIC;
+			else
+				win_data->resize_type = GEOMETRY_CUSTOM;
+			win_data->geometry_width = column;
+			win_data->geometry_height = row;
+			keep_gtk3_window_size(win_data, TRUE);
 #endif
+			break;
+		default:
+			break;
+	}
 }
 
 gboolean check_if_every_vte_is_using_restore_font_name(struct Window *win_data)
@@ -468,3 +473,19 @@ gboolean check_if_every_vte_is_using_restore_font_name(struct Window *win_data)
 	return return_value;
 }
 
+void fake_vte_terminal_set_font_from_string(GtkWidget *vte, const char *font_name, gboolean anti_alias)
+{
+#ifdef DETAIL
+	g_debug("! Launch fake_vte_terminal_set_font_from_string() with vte = %p, font_name = %s, anti_alias = %d", vte, font_name, anti_alias);
+#endif
+#ifdef SAFEMODE
+	if ((vte==NULL) || (font_name==NULL)) return;
+#endif
+
+#ifdef USE_VTE_TERMINAL_SET_FONT
+	PangoFontDescription *font_desc = pango_font_description_from_string(font_name);
+	vte_terminal_set_font(VTE_TERMINAL(vte), font_desc);
+#else
+	vte_terminal_set_font_from_string_full( VTE_TERMINAL(vte), font_name, anti_alias);
+#endif
+}

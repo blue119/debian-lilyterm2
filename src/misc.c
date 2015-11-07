@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2010 Lu, Chao-Ming (Tetralet).  All rights reserved.
+ * Copyright (c) 2008-2014 Lu, Chao-Ming (Tetralet).  All rights reserved.
  *
  * This file is part of LilyTerm.
  *
@@ -19,6 +19,60 @@
 
 #include "misc.h"
 extern gboolean proc_exist;
+extern gchar *proc_file_system_path;
+
+#ifdef USE_GTK_ALT_DIALOG_BUTTON_ORDER
+gboolean gtk_alt_dialog_button_order()
+{
+#ifdef DETAIL
+	g_debug("! Launch gtk_alt_dialog_button_order()");
+#endif
+	gboolean result;
+	g_object_get (gtk_settings_get_default(), "gtk-alternative-button-order", &result, NULL);
+	return result;
+}
+#endif
+
+gboolean check_if_proc_dir_exist(gchar *proc_dir)
+{
+#ifdef DETAIL
+	g_debug("! Launch check_if_proc_dir_exist() with proc_dir = %s", proc_dir);
+#endif
+	if (proc_dir == NULL) return FALSE;
+
+	if (g_file_test(proc_dir, G_FILE_TEST_EXISTS))
+	{
+		gboolean proc_is_exist = FALSE;
+		GDir *dir = g_dir_open (proc_dir, 0, NULL);
+		if (dir)
+		{
+			const gchar *entry = g_dir_read_name(dir);
+			if (entry)
+			{
+				g_free(proc_file_system_path);
+				proc_file_system_path = g_strdup(proc_dir);
+				proc_is_exist = TRUE;
+			}
+		}
+		g_dir_close(dir);
+		return proc_is_exist;
+	}
+
+	return FALSE;
+}
+
+gboolean check_if_default_proc_dir_exist(gchar *proc_dir)
+{
+#ifdef DETAIL
+	g_debug("! Launch check_if_default_proc_dir_exist() with proc_dir = %s", proc_dir);
+#endif
+	if (check_if_proc_dir_exist(proc_dir)) return TRUE;
+#ifdef BSD
+	if (check_if_proc_dir_exist("/compat/linux/proc")) return TRUE;
+#endif
+	if (check_if_proc_dir_exist("/proc")) return TRUE;
+	return FALSE;
+}
 
 // The returned string should be freed when no longer needed.
 gchar *convert_array_to_string(gchar **array, gchar separator)
@@ -43,6 +97,110 @@ gchar *convert_array_to_string(gchar **array, gchar separator)
 	}
 	// g_debug ("Got array_str = %s", array_str->str);
 	return g_string_free(array_str, FALSE);
+}
+
+// please vist http://en.wikipedia.org/wiki/Escape_sequences_in_C for more details
+gchar *convert_escape_sequence_to_string(const gchar *string)
+{
+	if (string == NULL) return NULL;
+
+	GString *new_string = g_string_new("");
+
+	long i=-1;
+	while (string[++i])
+	{
+		switch (string[i])
+		{
+			case '\a':
+				g_string_append(new_string, "\\a");
+				break;
+			case '\b':
+				g_string_append(new_string, "\\b");
+				break;
+			case '\f':
+				g_string_append(new_string, "\\f");
+				break;
+			case '\n':
+				g_string_append(new_string, "\\n");
+				break;
+			case '\r':
+				g_string_append(new_string, "\\r");
+				break;
+			case '\t':
+				g_string_append(new_string, "\\t");
+				break;
+			case '\v':
+				g_string_append(new_string, "\\v");
+				break;
+			case '\\':
+				g_string_append(new_string, "\\\\");
+				break;
+			case '\'':
+				g_string_append(new_string, "\\'");
+				break;
+			case '\"':
+				g_string_append(new_string, "\\\"");
+				break;
+			default:
+				g_string_append_printf(new_string, "%c", string[i]);
+				break;
+		}
+	}
+	return g_string_free(new_string, FALSE);
+}
+
+gchar *convert_escape_sequence_from_string(const gchar *string)
+{
+	if (string == NULL) return NULL;
+
+	GString *new_string = g_string_new("");
+
+	long i=-1;
+	while (string[++i])
+	{
+		if (string[i]=='\\')
+		{
+			switch (string[++i])
+			{
+				case 'a':
+					g_string_append(new_string, "\a");
+					break;
+				case 'b':
+					g_string_append(new_string, "\b");
+					break;
+				case 'f':
+					g_string_append(new_string, "\f");
+					break;
+				case 'n':
+					g_string_append(new_string, "\n");
+					break;
+				case 'r':
+					g_string_append(new_string, "\r");
+					break;
+				case 't':
+					g_string_append(new_string, "\t");
+					break;
+				case 'v':
+					g_string_append(new_string, "\v");
+					break;
+				case '\\':
+					g_string_append(new_string, "\\");
+					break;
+				case '\'':
+					g_string_append(new_string, "'");
+					break;
+				case '"':
+					g_string_append(new_string, "\"");
+					break;
+				default:
+					g_string_append_printf(new_string, "%c", string[i]);
+					break;
+			}
+		}
+		else
+			g_string_append_printf(new_string, "%c", string[i]);
+	}
+	return g_string_free(new_string, FALSE);
 }
 
 // return FALSE if the strings are the same.
@@ -228,6 +386,8 @@ const gchar *get_default_lc_data(gint lc_type)
 		case LC_MESSAGES:
 			lc_data = g_getenv("LC_MESSAGES");
 			break;
+		case LANGUAGE:
+			return g_getenv("LANGUAGE");
 		default:
 #ifdef FATAL
 			print_switch_out_of_range_error_dialog("get_default_lc_data", "lc_type", lc_type);
@@ -300,7 +460,7 @@ gboolean check_string_in_array(gchar *str, gchar **lists)
 //
 //	*length=0;
 //	gchar *contents=NULL;
-//	gchar *file_path = g_strdup_printf("/proc/%d/%s", (gint)pid, file);
+//	gchar *file_path = g_strdup_printf("%s/%d/%s", proc_file_system_path, (gint)pid, file);
 //	// g_debug("file_path = %s", file_path);
 //
 //	if (file_path && (g_file_test(file_path, G_FILE_TEST_EXISTS)))
@@ -323,7 +483,7 @@ gchar *get_proc_data(pid_t pid, gchar *file, gsize *length)
 #endif
 	gchar *contents=NULL;
 	gint timeout=0;
-	gchar *proc_path = g_strdup_printf("/proc/%d", (gint)pid);
+	gchar *proc_path = g_strdup_printf("%s/%d", proc_file_system_path, (gint)pid);
 	// g_debug("proc_path = %s", proc_path);
 	gchar *file_path = g_strdup_printf("%s/%s", proc_path, file);
 	// g_debug("file_path = %s", file_path);
@@ -340,7 +500,7 @@ gchar *get_proc_data(pid_t pid, gchar *file, gsize *length)
 			{
 				// gsize len = 0;
 				// gchar *stat = NULL;
-				// gchar *stat_path = g_strdup_printf("/proc/%d/stat", (gint)pid);
+				// gchar *stat_path = g_strdup_printf("%s/%d/stat", proc_file_system_path, (gint)pid);
 				// if (g_file_get_contents (stat_path, &contents, &len, NULL))
 				// {
 				//	g_debug("Got len = %d, stat = %s", len, stat);
@@ -362,7 +522,7 @@ gchar *get_proc_data(pid_t pid, gchar *file, gsize *length)
 				//	}
 				// }
 				// g_free(stat);
-				g_message("Waiting for /proc/%d/%s...", (gint)pid, file);
+				g_message("Waiting for %s/%d/%s...", proc_file_system_path, (gint)pid, file);
 				// we should wait until "/proc/%d/file" is not empty
 				usleep(100000);
 				timeout++;
@@ -377,9 +537,9 @@ gchar *get_proc_data(pid_t pid, gchar *file, gsize *length)
 			if (timeout>2)
 			{
 #ifdef FATAL
-				g_message("Failed when waiting for /proc/%d/%s. Abort.", (gint)pid, file);
+				g_message("Failed when waiting for %s/%d/%s. Abort.", proc_file_system_path, (gint)pid, file);
 #else
-				g_warning("Failed when waiting for /proc/%d/%s. Abort.", (gint)pid, file);
+				g_warning("Failed when waiting for %s/%d/%s. Abort.", proc_file_system_path, (gint)pid, file);
 #endif
 				break;
 			}
@@ -624,7 +784,68 @@ gchar *colorful_max_new_lines(gchar *string, gint max, gint output_line)
 	return NULL;
 }
 
-gboolean dirty_gdk_color_parse(const gchar *spec, GdkColor *color)
+GdkRGBA convert_color_to_rgba(GdkColor color)
+{
+	GdkRGBA rgba;
+#ifndef USE_GDK_RGBA
+	rgba.pixel = 0;
+#endif
+	rgba.red = (gdouble)(color.red>>8)/0xFF;
+	rgba.green = (gdouble)(color.green>>8)/0xFF;
+	rgba.blue = (gdouble)(color.blue>>8)/0xFF;
+
+	// g_debug("convert_color_to_rgba: convert color (%4X %4X %4X) to rgba (%0.4f %0.4f %0.4f)",
+	//	color.red, color.green, color.blue, rgba.red, rgba.green, rgba.blue);
+
+	return rgba;
+}
+
+GdkColor convert_rgba_to_color(GdkRGBA rgba)
+{
+	GdkColor color;
+
+	color.pixel = 0;
+	color.red = rgba.red*0xFFFF;
+	color.green = rgba.green*0xFFFF;
+	color.blue = rgba.blue*0xFFFF;
+
+	return color;
+}
+
+#ifdef ENABLE_GDKCOLOR_TO_STRING
+// The returned string should be freed when no longer needed.
+gchar *dirty_gdk_rgba_to_string(GdkRGBA *rgba)
+{
+#ifdef SAFEMODE
+	if (rgba==NULL) return NULL;
+#endif
+#  ifdef USE_GDK_RGBA
+	return g_strdup_printf("#%04x%04x%04x", (unsigned int)(rgba->red*0xFFFF), (unsigned int)(rgba->green*0xFFFF), (unsigned int)(rgba->blue*0xFFFF));
+#  else
+	return gdk_color_to_string(rgba);
+#  endif
+}
+#endif
+
+#if defined(GEOMETRY) || defined(UNIT_TEST)
+void widget_size_allocate (GtkWidget *widget, GtkAllocation *allocation, gchar *name)
+{
+#  ifdef DETAIL
+	g_debug("! Launch widget_size_allocate() with widget = %p, name = %s", widget, name);
+#  endif
+	// 200x200: the default size of a GtkWindow
+	gint ansi_color = ANSI_COLOR_BLACK;
+#ifdef SAFEMODE
+	if (allocation==NULL) return;
+#endif
+	if ((allocation->width <= 200) || (allocation->height <= 200))
+		ansi_color = ANSI_COLOR_RED;
+	fprintf(stderr, "\033[1;%dm!! %s_size_allocate(%p): the allocated size is %d x %d\033[0m\n",
+		ansi_color, name, widget, allocation->width, allocation->height);
+}
+#endif
+
+gboolean dirty_gdk_color_parse(const gchar *spec, GdkRGBA *color)
 {
 #ifdef DETAIL
 	g_debug("! Launch dirty_gdk_color_parse() with spec = %s", spec);
@@ -636,10 +857,64 @@ gboolean dirty_gdk_color_parse(const gchar *spec, GdkColor *color)
 	if (new_spec==NULL) return FALSE;
 #endif
 	new_spec = g_strstrip(new_spec);
-	gboolean response = gdk_color_parse(new_spec, color);
+	gboolean response = gdk_rgba_parse(color, new_spec);
 	g_free(new_spec);
 	return response;
 }
+
+GtkWidget *dirty_gtk_vbox_new(gboolean homogeneous, gint spacing)
+{
+#ifdef DETAIL
+	g_debug("! Launch dirty_gtk_vbox_new() with homogeneous = %d, spacing = %d", homogeneous, spacing);
+#endif
+#if GTK_CHECK_VERSION(2,90,0)
+	GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, spacing);
+	gtk_box_set_homogeneous(GTK_BOX(box), homogeneous);
+#else
+	GtkWidget *box = gtk_vbox_new(homogeneous, spacing);
+#endif
+	return box;
+}
+
+GtkWidget *dirty_gtk_hbox_new(gboolean homogeneous, gint spacing)
+{
+#ifdef DETAIL
+	g_debug("! Launch dirty_gtk_hbox_new() with homogeneous = %d, spacing = %d", homogeneous, spacing);
+#endif
+#if GTK_CHECK_VERSION(2,90,0)
+	GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, spacing);
+	gtk_box_set_homogeneous(GTK_BOX(box), homogeneous);
+#else
+	GtkWidget *box = gtk_hbox_new(homogeneous, spacing);
+#endif
+	return box;
+}
+
+#if defined(ENABLE_VTE_BACKGROUND) || defined(FORCE_ENABLE_VTE_BACKGROUND) || defined(UNIT_TEST)
+void dirty_vte_terminal_set_background_tint_color(VteTerminal *vte, const GdkRGBA rgba)
+{
+#  ifdef DETAIL
+	g_debug("! Launch dirty_vte_terminal_set_background_tint_color() with vte = %p", vte);
+#  endif
+#  ifdef SAFEMODE
+	if (vte==NULL) return;
+#  endif
+#  ifdef FORCE_ENABLE_VTE_BACKGROUND
+	G_GNUC_BEGIN_IGNORE_DEPRECATIONS;
+#  endif
+#  ifdef USE_GDK_RGBA
+#    ifndef USE_FAKE_FUNCTIONS
+	GdkColor color = convert_rgba_to_color(rgba);
+#    endif
+	vte_terminal_set_background_tint_color(VTE_TERMINAL(vte), &(color));
+#  else
+	vte_terminal_set_background_tint_color(VTE_TERMINAL(vte), &(rgba));
+#  endif
+#  ifdef FORCE_ENABLE_VTE_BACKGROUND
+	G_GNUC_END_IGNORE_DEPRECATIONS;
+#  endif
+}
+#endif
 
 #if defined(OUT_OF_MEMORY) || defined(UNIT_TEST)
 gchar *fake_g_strdup(const gchar *str)
@@ -722,5 +997,4 @@ gchar** fake_g_strsplit(const gchar *string, const gchar *delimiter, gint max_to
 
 // A very dirty fix for unit test error.
 gchar **g_listenv (void) { return NULL; }
-
 #endif
