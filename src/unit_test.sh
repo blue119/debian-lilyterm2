@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2008-2010 Lu, Chao-Ming (Tetralet).  All rights reserved.
+# Copyright (c) 2008-2014 Lu, Chao-Ming (Tetralet).  All rights reserved.
 #
 # This file is part of LilyTerm.
 #
@@ -28,6 +28,8 @@ BUILD_ONLY=0
 LIB_LISTS="lilyterm.h"
 FUNCTION_FOUND=0
 
+GDB_ERROR=0
+
 ECHO=`whereis "echo" | tr -s ' ' '\n' | grep "bin/""echo""$" | head -n 1`
 PRINTF=`whereis "printf" | tr -s ' ' '\n' | grep "bin/""printf""$" | head -n 1`
 CAT=`whereis "cat" | tr -s ' ' '\n' | grep "bin/""cat""$" | head -n 1`
@@ -41,7 +43,7 @@ fi
 
 for opt do
 	case "$opt" in
-		--help)
+		-h|--help)
 			$ECHO "Usage: sh $0 INCLUDES --test_all --enable-glib-debugger --enable-gtk-debugger --enable-gdb --enable-valgrind --specific_function=FUNCTION_NAME --skip_function=FUNCTION_NAME --create_program_only --build_program_only"
 			exit 0
 			;;
@@ -96,20 +98,29 @@ VTE=`$PKGCONFIG --exists 'vte' && $ECHO 'vte'`
 if [ "$VTE" = "vte" ]; then
   GTK=`$PKGCONFIG --exists 'gtk+-2.0' && $ECHO 'gtk+-2.0'`
   if [ "$GTK" != "gtk+-2.0" ]; then
-    $PRINTF "\033[1;31m** ERROR: You need GTK+2 to run this unit test program!\033[0m\n"
+    $PRINTF "\033[1;31m** ERROR: You need to install GTK+2 develop package first to run this unit test program!\033[0m\n"
     exit 1
   fi
 else
-  VTE=`$PKGCONFIG --exists 'vte-2.90' && $ECHO 'vte-2.90'`
-  if [ "$VTE" = "vte-2.90" ]; then
+  VTE=`$PKGCONFIG --exists 'vte-2.91' && $ECHO 'vte-2.91'`
+  if [ "$VTE" = "vte-2.91" ]; then
+    LDFLAGS='-lX11'
     GTK=`$PKGCONFIG --exists 'gtk+-3.0' && $ECHO 'gtk+-3.0'`
     if [ "$GTK" != "gtk+-3.0" ]; then
-      $PRINTF "\033[1;31m** ERROR: You need GTK+3 to run this unit test program!\033[0m\n"
+      $PRINTF "\033[1;31m** ERROR: You need to install GTK+3 develop package first to run this unit test program!\033[0m\n"
       exit 1
     fi
   else
-    $PRINTF "\033[1;31m** ERROR: You need VTE to run this unit test program!\033[0m\n"
-    exit 1
+    VTE=`$PKGCONFIG --exists 'vte-2.90' && $ECHO 'vte-2.90'`
+    if [ "$VTE" = "vte-2.90" ]; then
+      GTK=`$PKGCONFIG --exists 'gtk+-3.0' && $ECHO 'gtk+-3.0'`
+      if [ "$GTK" != "gtk+-3.0" ]; then
+        $PRINTF "\033[1;31m** ERROR: You need to install GTK+3 develop package first to run this unit test program!\033[0m\n"
+        exit 1
+      fi
+    else
+      exit 1
+    fi
   fi
 fi
 
@@ -233,16 +244,13 @@ for DATA in `$CAT $LIB_LISTS | sed '/^\/\*/,/ \*\/$/d' | sed -e 's/[ \t]*\/\*[ \
 				case $STR in
 					'...')
 						;;
-					'GtkWidget*' | 'GSourceFunc' | 'gpointer' | 'GtkColorSelection*' | 'GtkTreePath*' | 'GtkTreeModel*' | 'GtkTreeIter*' | 'GdkEvent*' | 'GdkEventKey*' | 'GtkCellLayout*' | 'GtkTreeSelection*' | 'GtkClipboard*' | 'GError*' | 'GSList*' | 'GIOChannel*' | 'GtkFileChooser*' | 'GtkRequisition*' | 'GdkEventButton*' | 'GtkStyle*' | 'GtkAllocation*' | 'GdkEventFocus*' | 'GdkEventWindowState*' | 'GdkColor []')
+					'GtkWidget*' | 'GSourceFunc' | 'gpointer' | 'GtkColorSelection*' | 'GtkTreePath*' | 'GtkTreeModel*' | 'GtkTreeIter*' | 'GdkEvent*' | 'GdkEventKey*' | 'GtkCellLayout*' | 'GtkTreeSelection*' | 'GtkClipboard*' | 'GError*' | 'GSList*' | 'GIOChannel*' | 'GtkFileChooser*' | 'GtkRequisition*' | 'GdkEventButton*' | 'GtkStyle*' | 'GtkAllocation*' | 'GdkEventFocus*' | 'GdkEventWindowState*' | 'GdkColor []' | 'GdkRGBA []' | 'PangoFontFamily*' | 'PangoFontFace*' | 'GtkColorButton*' | 'GtkColorChooser*')
 						FUNCTION="$FUNCTION NULL,"
 						;;
-					'GKeyFile*'|'GdkColor')
+					'GKeyFile*'|'GdkColor'|'GdkRGBA')
 						OLD_SPACE="$SPACE"
 						SPACE="$SPACE""_SPACE_"
 						VAR=`expr $VAR + 1`
-						if [ $MAX_VAR -le $VAR ]; then
-							MAX_VAR=$VAR
-						fi
 						case $STR in
 							'GKeyFile*')
 								FUNC_STAR="$FUNC_STAR\n$SPACE""GKeyFile *V$VAR = g_key_file_new();"
@@ -253,6 +261,10 @@ for DATA in `$CAT $LIB_LISTS | sed '/^\/\*/,/ \*\/$/d' | sed -e 's/[ \t]*\/\*[ \
 								FUNC_STAR="$FUNC_STAR\n$SPACE""GdkColor V$VAR;\n$SPACE""V$VAR.red=0xFFFF;\n$SPACE""V$VAR.green=0xFFFF;\n$SPACE""V$VAR.blue=0xFFFF;"
 								FUNCTION="$FUNCTION V$VAR,"
 								;;
+							'GdkRGBA')
+								FUNC_STAR="$FUNC_STAR\n$SPACE""GdkRGBA V$VAR;\n$SPACE""V$VAR.red=1;\n$SPACE""V$VAR.green=1;\n$SPACE""V$VAR.blue=1;"
+								FUNCTION="$FUNCTION V$VAR,"
+								;;
 						esac
 						if [ -n "$FUNC_END" ]; then
 							FUNC_END="\n$FUNC_END"
@@ -261,7 +273,7 @@ for DATA in `$CAT $LIB_LISTS | sed '/^\/\*/,/ \*\/$/d' | sed -e 's/[ \t]*\/\*[ \
 						unset FUN_DATA
 						SPACE=$OLD_SPACE
 						;;
-					'gboolean' | 'gchar' | 'guint' | 'GtkScrollType' | 'gint' | 'pid_t' | 'int' | 'gsize' | 'glong' | 'GdkColor' | 'Dialog_Button_Type' | 'Dialog_Find_Type' | 'Dialog_Type_Flags' | 'Font_Name_Type' | 'Font_Reset_Type' | 'Switch_Type' | 'Font_Set_Type' | 'Set_ANSI_Theme_Type' | 'GtkFileChooserAction' | 'GIOCondition' | 'Check_Zero' | 'Check_Max' | 'Check_Min' | 'Check_Empty' | 'Menu_Itemn_Type' | 'Apply_Profile_Type' | 'Clipboard_Type' | 'gchar*' | 'char*' | 'StrLists*' | 'StrAddr**' | 'gdouble' | 'struct Dialog*' | 'struct Window*' | 'struct Page*' | 'struct Color_Data*' | 'struct Preview*' | 'GtkButton*' | 'GtkCellRenderer*' | 'GtkRange*' | 'gchar**' | 'char*[]' | 'char**' | 'gsize*' | 'GString*' | 'GtkNotebook*' | 'GdkColor*' | 'VteTerminal*'  | 'gboolean*' | 'gint*' | 'guint*')
+					'gboolean' | 'gchar' | 'guint' | 'GtkScrollType' | 'gint' | 'pid_t' | 'int' | 'gsize' | 'glong' | 'GdkColor' | 'GdkRGBA' | 'Dialog_Button_Type' | 'Dialog_Find_Type' | 'Dialog_Type_Flags' | 'Font_Name_Type' | 'Key_Bindings' | 'Hints_Type' | 'Window_Status' | 'Geometry_Resize_Type' | 'Font_Reset_Type' | 'Switch_Type' | 'Font_Set_Type' | 'Set_ANSI_Theme_Type' | 'GtkFileChooserAction' | 'GIOCondition' | 'Check_Zero' | 'Check_Max' | 'Check_Min' | 'Check_Empty' | 'Menu_Itemn_Type' | 'Apply_Profile_Type' | 'Clipboard_Type' | 'gchar*' | 'char*' | 'StrLists*' | 'StrAddr**' | 'gdouble' | 'struct Dialog*' | 'struct Window*' | 'struct Page*' | 'struct Color_Data*' | 'struct Preview*' | 'GtkButton*' | 'GtkCellRenderer*' | 'GtkRange*' | 'gchar**' | 'char*[]' | 'char**' | 'gsize*' | 'GString*' | 'GtkNotebook*' | 'GdkColor*' | 'GdkRGBA*' | 'VteTerminal*'  | 'gboolean*' | 'gint*' | 'guint*' | 'glong*')
 						SPACE="$SPACE""_SPACE_"
 						VAR=`expr $VAR + 1`
 						if [ $MAX_VAR -le $VAR ]; then
@@ -273,7 +285,7 @@ for DATA in `$CAT $LIB_LISTS | sed '/^\/\*/,/ \*\/$/d' | sed -e 's/[ \t]*\/\*[ \
 								FUNC_STAR="$FUNC_STAR\n$SPACE""_SPACE_""$STR V$VAR = V[$VAR];"
 								FUNCTION="$FUNCTION V$VAR,"
 								;;
-							'gboolean*' | 'gint*' | 'guint*' | 'gsize*')
+							'gboolean*' | 'gint*' | 'guint*' | 'gsize*' | 'glong*')
 								NO_STAR_STR=`$ECHO $STR | sed -e 's/\*$//g'`
 								FUNC_STAR="$FUNC_STAR\n$SPACE""for (V[$VAR]=0; V[$VAR]<2; V[$VAR]++) {"
 								FUNC_STAR="$FUNC_STAR\n$SPACE""_SPACE_""$NO_STAR_STR V$VAR = V[$VAR];"
@@ -281,8 +293,11 @@ for DATA in `$CAT $LIB_LISTS | sed '/^\/\*/,/ \*\/$/d' | sed -e 's/[ \t]*\/\*[ \
 								FUNC_STAR="$FUNC_STAR\n$SPACE""_SPACE_""if (V[$VAR]) G$VAR = ($STR)&(V$VAR);"
 								FUNCTION="$FUNCTION G$VAR,"
 								;;
-							'Dialog_Button_Type' | 'Dialog_Find_Type' | 'Dialog_Type_Flags' | 'Font_Name_Type' | 'Font_Reset_Type' | 'Switch_Type' | 'Font_Set_Type' | 'Set_ANSI_Theme_Type' | 'Check_Zero' | 'Check_Max' | 'Check_Min' | 'Check_Empty' | 'Menu_Itemn_Type' | 'Apply_Profile_Type' | 'Clipboard_Type')
-								LAST=`grep -B 1 "$STR;" *.h | head -n 1 | sed -e 's/^.*[ \t][ \t]*\([^ \t]*\),.*/\1/g'`
+							'Dialog_Button_Type' | 'Dialog_Find_Type' | 'Dialog_Type_Flags' | 'Font_Name_Type' | 'Key_Bindings' | 'Hints_Type' | 'Window_Status' | 'Geometry_Resize_Type' | 'Font_Reset_Type' | 'Font_Reset_Type' | 'Switch_Type' | 'Font_Set_Type' | 'Set_ANSI_Theme_Type' | 'Check_Zero' | 'Check_Max' | 'Check_Min' | 'Check_Empty' | 'Menu_Itemn_Type' | 'Apply_Profile_Type' | 'Clipboard_Type')
+								LAST=`grep -B 3 "$STR;" *.h | sed -e '/\.h[-:][ \t]*#/d'| tail -n 2 | head -n 1 | head -n 1| sed -e 's/^.*[ \t][ \t]*\([^ \t]*\),.*/\1/g'`
+								# $ECHO Got LAST=$LAST
+								# $ECHO Got STR=$STR
+
 								FUNC_STAR="$FUNC_STAR\n$SPACE""for (V[$VAR]=0; V[$VAR]<=$LAST; V[$VAR]++) {"
 								FUNC_STAR="$FUNC_STAR\n$SPACE""_SPACE_""$STR V$VAR = V[$VAR];"
 								FUNCTION="$FUNCTION V$VAR,"
@@ -374,6 +389,11 @@ for DATA in `$CAT $LIB_LISTS | sed '/^\/\*/,/ \*\/$/d' | sed -e 's/[ \t]*\/\*[ \
 								FUNC_STAR="$FUNC_STAR\n$SPACE""_SPACE_""GdkColor *V$VAR = NULL;\n$SPACE""_SPACE_""GdkColor color;\n""$SPACE""_SPACE_""if (V[$VAR]) {\n$SPACE""_SPACE__SPACE_""color.red=0xFFFF;\n$SPACE""_SPACE__SPACE_""color.green=0xFFFF;\n$SPACE""_SPACE__SPACE_""color.blue=0xFFFF;\n$SPACE""_SPACE__SPACE_""V$VAR = &color;\n""$SPACE""_SPACE_""}"
 								FUNCTION="$FUNCTION V$VAR,"
 								;;
+							'GdkRGBA*')
+								FUNC_STAR="$FUNC_STAR\n$SPACE""for (V[$VAR]=0; V[$VAR]<2; V[$VAR]++) {"
+								FUNC_STAR="$FUNC_STAR\n$SPACE""_SPACE_""GdkRGBA *V$VAR = NULL;\n$SPACE""_SPACE_""GdkRGBA color;\n""$SPACE""_SPACE_""if (V[$VAR]) {\n$SPACE""_SPACE__SPACE_""color.red=0xFFFF;\n$SPACE""_SPACE__SPACE_""color.green=1;\n$SPACE""_SPACE__SPACE_""color.blue=0xFFFF;\n$SPACE""_SPACE__SPACE_""V$VAR = &color;\n""$SPACE""_SPACE_""}"
+								FUNCTION="$FUNCTION V$VAR,"
+								;;
 							'VteTerminal*')
 								FUNC_STAR="$FUNC_STAR\n$SPACE""for (V[$VAR]=0; V[$VAR]<2; V[$VAR]++) {"
 								FUNC_STAR="$FUNC_STAR\n$SPACE""_SPACE_""GtkWidget *V$VAR = NULL;\n""$SPACE""_SPACE_""if (V[$VAR]) V$VAR = vte_terminal_new();"
@@ -454,9 +474,9 @@ EOF
 EOF
 	if [ $TEST_SCRIPT_ONLY -eq 0 ]; then
 		$PRINTF "\033[1;36m$FUNC_NAME(): \033[1;33m** Compiling unit_test.o...\033[0m\n"
-		$CC $CFLAGS $INCLUDES -c unit_test.c `$PKGCONFIG --cflags $GTK $VTE` || exit 1
+		$CC $LDFLAGS $CFLAGS $INCLUDES -c unit_test.c `$PKGCONFIG --cflags $GTK $VTE` || exit 1
 		$PRINTF "\033[1;36m$FUNC_NAME(): \033[1;33m** Compiling unit_test...\033[0m\n"
-		$CC $CFLAGS $INCLUDES -o unit_test $OBJ `$PKGCONFIG --cflags --libs $GTK $VTE` || exit 1
+		$CC $LDFLAGS $CFLAGS $INCLUDES -o unit_test $OBJ `$PKGCONFIG --cflags --libs $GTK $VTE` || exit 1
 		# if [ $? != 0 ]; then exit 1; fi
 
 		if [ $BUILD_ONLY -eq 0 ]; then
@@ -471,6 +491,9 @@ EOF
 					if [ -z "$CHECK_STR" ]; then
 						$CAT /tmp/lilyterm_$FUNC_NAME.log >> gdb.log
 						$ECHO "" >> gdb.log
+						$PRINTF "\033[1;36m$FUNC_NAME(): \033[1;31m** Exit with GDB error!!\033[0m\n"
+						GDB_ERROR=1
+						GDB_ERROR_PROGRAM="$GDB_ERROR_PROGRAM$FUNC_NAME()\n             "
 					else
 						$PRINTF "\033[1;36m$FUNC_NAME(): \033[1;33m** Program exited normally. Clear log...\033[0m\n"
 					fi
@@ -491,4 +514,8 @@ done
 
 if [ -f ./gdb_batch ]; then
 	rm ./gdb_batch
+fi
+
+if [ $GDB_ERROR -eq 1 ]; then
+	$PRINTF "\n\033[1;31mERROR: \033[1;36mThis unit test program had exited with GDB error.\n       LIST: \033[1;33m`printf "$GDB_ERROR_PROGRAM" | sed -e '$d'`\033[1;36m\n       Please check \033[1;32mgdb.log\033[1;36m for feature information!!\033[0m\n\n"
 fi

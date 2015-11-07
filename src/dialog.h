@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2010 Lu, Chao-Ming (Tetralet).  All rights reserved.
+ * Copyright (c) 2008-2014 Lu, Chao-Ming (Tetralet).  All rights reserved.
  *
  * This file is part of LilyTerm.
  *
@@ -54,6 +54,8 @@ struct Dialog
 	gdouble original_window_opacity_inactive;
 	gboolean original_dim_window;
 #endif
+	GtkWidget *custom_cursor_color_checkbox;
+	gboolean original_custom_cursor_color;
 	gboolean original_transparent_background;
 	gboolean original_invert_color;
 	gboolean original_have_custom_color;
@@ -87,17 +89,20 @@ struct Dialog
 	GtkWidget *demo_vte;
 
 	gchar *original_page_color;
-	GdkColor original_color;
+	GdkRGBA original_color;
 	// the color theme that will apply to current vte
-	GdkColor ansi_colors_orig[COLOR];
-	GdkColor ansi_colors[COLOR];
+	GdkRGBA ansi_colors_orig[COLOR];
+	GdkRGBA ansi_colors[COLOR];
 	gchar *original_custom_page_name;
 
 	gboolean transparent_background;
 };
 void init_dialog_ansi_colors_from_win_data(struct Window *win_data, struct Dialog *dialog_data);
-void update_fg_bg_color(struct Window *win_data, GdkColor color, gboolean update_fg);
+void update_fg_bg_color(struct Window *win_data, GdkRGBA color, gboolean update_fg);
 void clear_custom_colors_data(struct Window *win_data, gboolean update_fg);
+#if defined(USE_OLD_GTK_COLOR_SELECTION) || defined(UNIT_TEST)
+void update_custom_cursor_color(GtkWidget *menuitem, struct Window *win_data);
+#endif
 void dialog_invert_color_theme(GtkWidget *menuitem, struct Window *win_data);
 void update_color_buttons(struct Window *win_data, struct Dialog *dialog_data);
 void update_ansi_color_info(GtkWidget *button, gint color_index);
@@ -118,6 +123,7 @@ GtkWidget *create_frame_widget( struct Dialog *dialog_data, gchar *label,
 GtkWidget *create_button_with_image(gchar *label_text, const gchar *stock_id, gboolean set_tooltip_text,
 				    GSourceFunc func, gpointer func_data);
 void create_color_selection_widget(struct Dialog *dialog_data, GSourceFunc func, gpointer func_data);
+void set_color_selection_colors(GtkWidget *color_selection, GdkRGBA *color);
 void create_scale_widget(struct Dialog *dialog_data, gdouble min, gdouble max, gdouble step, gdouble value,
 			 GSourceFunc func, gpointer func_data);
 void create_SIGKILL_and_EXIT_widget(struct Dialog *dialog_data, gboolean create_entry_hbox,
@@ -128,9 +134,12 @@ gchar *deal_dialog_key_press_join_string(StrAddr **value, gchar *separator, gcha
 gboolean clean_model_foreach(GtkTreeModel *model, GtkTreePath *path, GtkTreeIter *iter, gpointer userdata);
 void recover_page_colors(GtkWidget *dialog, GtkWidget *window, GtkWidget *notebook);
 gboolean set_ansi_color(GtkRange *range, GtkScrollType scroll, gdouble value, GtkWidget *vte);
-void adjust_vte_color (GtkColorSelection *colorselection, GtkWidget *vte);
-void set_new_ansi_color(GtkWidget *vte, GdkColor color_orig[COLOR], GdkColor color[COLOR], gdouble color_brightness,
-			gboolean invert_color, gboolean default_vte_color, GdkColor cursor_color, gboolean dim_fg_color);
+#if defined(USE_GTK_COLOR_CHOOSER) || defined(UNIT_TEST)
+void adjust_vte_color_sample(GtkColorButton* color_button, gint color_index);
+#endif
+void adjust_vte_color(GtkColorChooser *colorselection, GdkRGBA *color, GtkWidget *vte);
+void set_new_ansi_color(GtkWidget *vte, GdkRGBA color_orig[COLOR], GdkRGBA color[COLOR], gdouble color_brightness, gboolean invert_color,
+			gboolean default_vte_color, gboolean custom_cursor_color, GdkRGBA cursor_color, gboolean dim_fg_color);
 void hide_combo_box_capital(GtkCellLayout *cell_layout, GtkCellRenderer *cell,
 			    GtkTreeModel *tree_model, GtkTreeIter *iter, gpointer data);
 void update_key_info (GtkTreeSelection *treeselection, struct Dialog *dialog_data);

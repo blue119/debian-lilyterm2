@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2010 Lu, Chao-Ming (Tetralet).  All rights reserved.
+ * Copyright (c) 2008-2014 Lu, Chao-Ming (Tetralet).  All rights reserved.
  *
  * This file is part of LilyTerm.
  *
@@ -29,3 +29,5 @@
 #include <glib/gi18n.h>
 
 #include "lilyterm.h"
+
+gboolean check_if_proc_dir_exist(gchar *proc_dir);

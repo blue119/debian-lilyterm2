@@ -22,10 +22,10 @@ AC_ARG_ENABLE(debug, AC_HELP_STRING([--enable-debug], [enable debug mode]),
 
 AC_ARG_ENABLE(safe-mode, AC_HELP_STRING([--disable-safe-mode], [disable run in safe mode]),
 	      CFLAGS="$CFLAGS -g"
-	      AC_DEFINE(SAFEMODE,, [disable run in safe mode]))
+	      AC_DEFINE(REALMODE,, [disable run in safe mode]))
 
 PKG_CHECK_EXISTS(gtk+-2.0 < 2.12,
-		 AC_MSG_WARN([Using Gtk+ >= 2.12.0 to build $_PACKAGE is recommend]))
+		 AC_MSG_WARN([Using Gtk+ >= 2.12.0 to build $_PACKAGE is recommended]))
 
 AC_MSG_CHECKING([whether to install GNOME control-center default application definition])
 if $PKG_CONFIG --variable=keysdir gnome-default-applications >/dev/null ; then
@@ -51,7 +51,7 @@ AC_DEFINE([BUGREPORT], ["$_BUGREPORT"], "The author's email address.")
 
 AC_PROG_INTLTOOL
 ALL_LINGUAS="$_LANG_LIST"
-GETTEXT_PACKAGE="$_PACKAGE"
+GETTEXT_PACKAGE="$_BINARY"
 AC_SUBST(GETTEXT_PACKAGE)
 AM_GLIB_GNU_GETTEXT
 AM_GLIB_DEFINE_LOCALEDIR(LOCALEDIR)
