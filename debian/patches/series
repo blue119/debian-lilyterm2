@@ -1,3 +1,1 @@
-manpage-minus.patch
-locale.patch
-0001-Fix-hard-coded-URL-handlers.patch
+use-gtk3-instead-of-gtk2.patch

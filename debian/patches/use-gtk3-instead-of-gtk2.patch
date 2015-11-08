@@ -1,0 +1,15 @@
+diff --git a/autogen.sh b/autogen.sh
+index 30ad7f3..5f4d768 100755
+--- a/autogen.sh
++++ b/autogen.sh
+@@ -45,8 +45,8 @@ Replace_Parameter BINARY
+ echo ""
+ 
+ # for GTK3+
+-pkg-config --cflags gtk+-2.0 > /dev/null 2>&1
+-if [ $? != 0 ]; then
++pkg-config --cflags gtk+-3.0 > /dev/null 2>&1
++if [ $? = 0 ]; then
+   sed -i 's/^AM_PATH_GTK_2_0.*/PKG_CHECK_MODULES([GTK], [gtk+-3.0])/g' configure.ac
+   pkg-config --cflags vte-2.91 > /dev/null 2>&1
+   if [ $? = 0 ]; then
