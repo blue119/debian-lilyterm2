@@ -1,3 +1,13 @@
+lilyterm (0.9.9.4+git20150208.f600c0-1.1) unstable; urgency=medium
+
+  * Non-maintainer upload
+  * let the lilyterm support libvte-2.91 (Closes: #790181)
+  * Integrate upstream up to f600c086
+  * Remove 0001-Fix-hard-coded-URL-handlers.patch, locale.patch, and
+    manpage-minus.patch that all included in current source.
+
+ -- Yao-Po Wang <blue119@gmail.com>  Sun, 01 Nov 2015 16:08:20 +0800
+
 lilyterm (0.9.9.4-4) unstable; urgency=medium
 
   [ ChangZhuo Chen (陳昌倬) ]
