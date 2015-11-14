@@ -9,7 +9,7 @@ export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 %:
 	dh $@ --with autoreconf
 
-override_dh_auto_configure:
+override_dh_autoconf:
 	mkdir -p $(CURDIR)/debian/bak
 	cp $(CURDIR)/configure.ac $(CURDIR)/debian/bak
 
@@ -20,6 +20,8 @@ override_dh_auto_configure:
 	cp $(CURDIR)/po/lilyterm.pot $(CURDIR)/debian/bak/po
 
 	./autogen.sh
+
+override_dh_auto_configure:
 	dh_auto_configure -- --disable-silent-rules
 
 override_dh_auto_clean:
